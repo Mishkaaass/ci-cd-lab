@@ -10,7 +10,7 @@ def home():
 
 @app.get("/health")
 def health():
-    return jsonify(status="ok"), 200
+    return jsonify(status="ok"), 503
 
 
 if __name__ == "__main__":
