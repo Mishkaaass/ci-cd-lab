@@ -36,3 +36,15 @@ jobs:
 
       - name: Run automated tests
         run: python -m pytest -v
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v7
+
+      - name: Build Docker image
+        run: docker build -t ci-cd-lab:ci .
