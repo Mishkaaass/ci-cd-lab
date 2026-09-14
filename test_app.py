@@ -7,9 +7,7 @@ def test_home_endpoint():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert response.get_json() == {
-        "message": "Hello from CI/CD!"
-    }
+    assert response.get_json() == {"message": "Hello from CI/CD!"}
 
 
 def test_health_endpoint():
@@ -18,6 +16,4 @@ def test_health_endpoint():
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.get_json() == {
-        "status": "ok"
-    }
+    assert response.get_json() == {"status": "ok"}
