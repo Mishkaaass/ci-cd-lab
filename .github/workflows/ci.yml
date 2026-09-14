@@ -112,9 +112,9 @@ jobs:
           GITLEAKS_ENABLE_COMMENTS: "false"
 
   docker:
-    name: Docker build
+    name: Container security
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Download repository
@@ -122,3 +122,13 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t ci-cd-lab:ci .
+
+      - name: Scan Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ci-cd-lab:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
