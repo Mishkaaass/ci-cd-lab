@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>OpsBoard</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/styles.css') }}"
+    >
+
+    <meta http-equiv="refresh" content="5">
+</head>
+
+<body>
+
+<div class="shell">
+
+    <header class="topbar">
+        <div>
+            <p class="eyebrow">PRODUCTION CONTROL</p>
+            <h1>OpsBoard</h1>
+            <p class="subtitle">
+                Deployment, service health and incident visibility
+            </p>
+        </div>
+
+        <div class="environment">
+            <span class="pulse"></span>
+            {{ environment | upper }}
+        </div>
+    </header>
+
+
+    <section class="overview-grid">
+
+        <article class="card service-card">
+
+            <div class="card-header">
+                <div>
+                    <p class="card-label">SERVICE</p>
+                    <h2>{{ service.name }}</h2>
+                </div>
+
+                <span class="status status-{{ service.status }}">
+                    {{ service.status | capitalize }}
+                </span>
+            </div>
+
+
+            <div class="metrics">
+
+                <div class="metric">
+                    <span class="metric-label">LATENCY</span>
+
+                    <strong>
+                        {% if service.latency_ms is not none %}
+                            {{ service.latency_ms }} ms
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+
+
+                <div class="metric">
+                    <span class="metric-label">READINESS</span>
+
+                    <strong>
+                        {% if service.ready %}
+                            Ready
+                        {% else %}
+                            Not Ready
+                        {% endif %}
+                    </strong>
+                </div>
+
+
+                <div class="metric">
+                    <span class="metric-label">VERSION</span>
+                    <strong>{{ service.version }}</strong>
+                </div>
+
+
+                <div class="metric">
+                    <span class="metric-label">COMMIT</span>
+                    <strong class="mono">{{ service.git_sha }}</strong>
+                </div>
+
+            </div>
+
+        </article>
+
+
+        <article class="card">
+
+            <p class="card-label">CURRENT DEPLOYMENT</p>
+
+            {% if latest_deployment %}
+
+                <div class="deployment-version">
+                    {{ latest_deployment.version }}
+                </div>
+
+                <div class="detail-row">
+                    <span>Status</span>
+
+                    <strong>
+                        {{ latest_deployment.status | capitalize }}
+                    </strong>
+                </div>
+
+                <div class="detail-row">
+                    <span>Commit</span>
+
+                    <strong class="mono">
+                        {{ latest_deployment.git_sha }}
+                    </strong>
+                </div>
+
+                <div class="detail-row">
+                    <span>Duration</span>
+
+                    <strong>
+                        {% if latest_deployment.duration_ms is not none %}
+                            {{ latest_deployment.duration_ms }} ms
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+
+            {% else %}
+
+                <p class="empty">No deployments recorded yet.</p>
+
+            {% endif %}
+
+        </article>
+
+
+        <article class="card">
+
+            <p class="card-label">INCIDENT STATUS</p>
+
+            <div class="big-number">
+                {{ active_incidents | length }}
+            </div>
+
+            <p class="big-number-label">
+                Active incidents
+            </p>
+
+            {% if active_incidents %}
+
+                <div class="incident-summary">
+                    <span class="severity">
+                        {{ active_incidents[0].severity | upper }}
+                    </span>
+
+                    <strong>
+                        {{ active_incidents[0].reason }}
+                    </strong>
+                </div>
+
+            {% else %}
+
+                <p class="healthy-text">
+                    No active incidents
+                </p>
+
+            {% endif %}
+
+        </article>
+
+    </section>
+
+
+    <section class="table-grid">
+
+        <article class="card">
+
+            <div class="card-header">
+                <div>
+                    <p class="card-label">HISTORY</p>
+                    <h2>Recent Deployments</h2>
+                </div>
+            </div>
+
+
+            <div class="table">
+
+                <div class="table-row table-heading">
+                    <span>Version</span>
+                    <span>Commit</span>
+                    <span>Status</span>
+                    <span>Duration</span>
+                </div>
+
+                {% for deployment in deployments %}
+
+                    <div class="table-row">
+
+                        <strong>
+                            {{ deployment.version }}
+                        </strong>
+
+                        <span class="mono">
+                            {{ deployment.git_sha }}
+                        </span>
+
+                        <span>
+                            {{ deployment.status | capitalize }}
+                        </span>
+
+                        <span>
+                            {% if deployment.duration_ms is not none %}
+                                {{ deployment.duration_ms }} ms
+                            {% else %}
+                                —
+                            {% endif %}
+                        </span>
+
+                    </div>
+
+                {% else %}
+
+                    <p class="empty">
+                        No deployment history.
+                    </p>
+
+                {% endfor %}
+
+            </div>
+
+        </article>
+
+
+        <article class="card">
+
+            <div class="card-header">
+                <div>
+                    <p class="card-label">OPERATIONS</p>
+                    <h2>Incident History</h2>
+                </div>
+            </div>
+
+
+            <div class="incident-list">
+
+                {% for incident in incidents %}
+
+                    <div class="incident">
+
+                        <div>
+
+                            <span class="severity">
+                                {{ incident.severity | upper }}
+                            </span>
+
+                            <strong>
+                                {{ incident.reason }}
+                            </strong>
+
+                            <p>
+                                {{ incident.service }}
+                            </p>
+
+                        </div>
+
+                        <span class="incident-state">
+                            {{ incident.status | capitalize }}
+                        </span>
+
+                    </div>
+
+                {% else %}
+
+                    <p class="empty">
+                        No incidents recorded.
+                    </p>
+
+                {% endfor %}
+
+            </div>
+
+        </article>
+
+    </section>
+
+
+    <footer>
+
+        <span>
+            Auto refresh: 5 seconds
+        </span>
+
+        <span>
+            Real service telemetry — no simulated metrics
+        </span>
+
+    </footer>
+
+</div>
+
+</body>
+</html>

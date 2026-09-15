@@ -1,0 +1,298 @@
+:root {
+    font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    background: #080b12;
+    color: #f4f7fb;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background:
+        radial-gradient(
+            circle at top left,
+            #172033,
+            transparent 35%
+        ),
+        #080b12;
+    min-height: 100vh;
+}
+
+.shell {
+    width: min(1400px, 94%);
+    margin: 0 auto;
+    padding: 42px 0;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+
+.eyebrow,
+.card-label {
+    color: #7f8da8;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    margin: 0 0 8px;
+}
+
+h1 {
+    font-size: 42px;
+    margin: 0;
+    letter-spacing: -0.04em;
+}
+
+h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.subtitle {
+    color: #98a5ba;
+    margin-top: 8px;
+}
+
+.environment {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    border: 1px solid #273148;
+    background: #111724;
+
+    padding: 10px 14px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.pulse {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 14px #4ade80;
+}
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 18px;
+}
+
+.table-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 18px;
+    margin-top: 18px;
+}
+
+.card {
+    background: rgba(17, 23, 36, 0.9);
+    border: 1px solid #232d42;
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+}
+
+.card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.status {
+    padding: 7px 11px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.status-healthy {
+    color: #86efac;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.status-degraded {
+    color: #fde68a;
+    background: rgba(234, 179, 8, 0.12);
+}
+
+.status-down {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.metrics {
+    margin-top: 30px;
+
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+}
+
+.metric {
+    background: #0c111c;
+    border: 1px solid #20293b;
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.metric-label {
+    display: block;
+    color: #718096;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.metric strong {
+    font-size: 18px;
+}
+
+.mono {
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+}
+
+.deployment-version,
+.big-number {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin: 18px 0;
+}
+
+.big-number-label {
+    color: #8e9bb0;
+    margin-top: -12px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+
+    padding: 11px 0;
+    border-top: 1px solid #20293b;
+
+    color: #8d9ab0;
+}
+
+.detail-row strong {
+    color: #f4f7fb;
+}
+
+.table {
+    margin-top: 20px;
+}
+
+.table-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 12px;
+
+    padding: 13px 4px;
+    border-bottom: 1px solid #20293b;
+
+    font-size: 14px;
+}
+
+.table-heading {
+    color: #738198;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.incident-list {
+    margin-top: 20px;
+}
+
+.incident {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+
+    padding: 14px 0;
+    border-bottom: 1px solid #20293b;
+}
+
+.incident p {
+    color: #77859b;
+    margin: 6px 0 0;
+    font-size: 13px;
+}
+
+.severity {
+    display: inline-block;
+    margin-right: 8px;
+
+    color: #fca5a5;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
+.incident-state {
+    color: #8d9ab0;
+    font-size: 12px;
+}
+
+.incident-summary {
+    margin-top: 18px;
+}
+
+.healthy-text {
+    color: #86efac;
+}
+
+.empty {
+    color: #77859b;
+}
+
+footer {
+    display: flex;
+    justify-content: space-between;
+
+    margin-top: 18px;
+    padding: 14px 4px;
+
+    color: #657188;
+    font-size: 12px;
+}
+
+@media (max-width: 900px) {
+    .overview-grid,
+    .table-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .metrics {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .topbar {
+        align-items: flex-start;
+        gap: 20px;
+        flex-direction: column;
+    }
+}

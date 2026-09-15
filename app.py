@@ -2,8 +2,10 @@ import os
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -44,6 +46,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.mount(
+    "/static",
+    StaticFiles(directory="static"),
+    name="static",
+)
+
+templates = Jinja2Templates(
+    directory="templates",
+)
+
 
 @app.get("/")
 def home():
@@ -51,6 +63,42 @@ def home():
         "message": "OpsBoard API",
         "status": "running",
     }
+
+
+@app.get(
+    "/dashboard",
+    response_class=HTMLResponse,
+)
+def dashboard(
+    request: Request,
+    db: DatabaseSession,
+):
+    service = fetch_demo_service_status()
+
+    deployments = list_deployments(db)[:10]
+    incidents = list_incidents(db)[:10]
+
+    active_incidents = [
+        incident for incident in incidents if incident.status == "active"
+    ]
+
+    latest_deployment = deployments[0] if deployments else None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "environment": os.getenv(
+                "APP_ENV",
+                "local",
+            ),
+            "service": service,
+            "deployments": deployments,
+            "latest_deployment": latest_deployment,
+            "incidents": incidents,
+            "active_incidents": active_incidents,
+        },
+    )
 
 
 @app.get("/health")
@@ -83,8 +131,14 @@ def readiness(
 @app.get("/version")
 def version():
     return {
-        "version": os.getenv("APP_VERSION", "dev"),
-        "git_sha": os.getenv("GIT_SHA", "local"),
+        "version": os.getenv(
+            "APP_VERSION",
+            "dev",
+        ),
+        "git_sha": os.getenv(
+            "GIT_SHA",
+            "local",
+        ),
     }
 
 
@@ -102,7 +156,10 @@ def add_deployment(
     payload: DeploymentCreate,
     db: DatabaseSession,
 ):
-    return create_deployment(db, payload)
+    return create_deployment(
+        db,
+        payload,
+    )
 
 
 @app.get(
@@ -124,7 +181,10 @@ def add_incident(
     payload: IncidentCreate,
     db: DatabaseSession,
 ):
-    return create_incident(db, payload)
+    return create_incident(
+        db,
+        payload,
+    )
 
 
 @app.get(
