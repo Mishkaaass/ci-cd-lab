@@ -2,6 +2,8 @@ import os
 
 from fastapi import FastAPI
 
+from opsboard.monitor import fetch_demo_service_status
+
 app = FastAPI(
     title="OpsBoard API",
     version="0.1.0",
@@ -32,3 +34,8 @@ def version():
         "version": os.getenv("APP_VERSION", "dev"),
         "git_sha": os.getenv("GIT_SHA", "local"),
     }
+
+
+@app.get("/api/services/demo")
+def demo_service_status():
+    return fetch_demo_service_status()
