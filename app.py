@@ -1,17 +1,35 @@
 import os
 from contextlib import asynccontextmanager
+from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from opsboard.database import Base, engine, get_db
-from opsboard.deployments import create_deployment, list_deployments
-from opsboard.models import Deployment  # noqa: F401
+from opsboard.deployments import (
+    create_deployment,
+    list_deployments,
+)
+from opsboard.incidents import (
+    create_incident,
+    list_incidents,
+    resolve_incident,
+)
 from opsboard.monitor import fetch_demo_service_status
-from opsboard.schemas import DeploymentCreate, DeploymentRead
+from opsboard.schemas import (
+    DeploymentCreate,
+    DeploymentRead,
+    IncidentCreate,
+    IncidentRead,
+)
+
+DatabaseSession = Annotated[
+    Session,
+    Depends(get_db),
+]
 
 
 @asynccontextmanager
@@ -42,7 +60,7 @@ def health():
 
 @app.get("/ready")
 def readiness(
-    db: Session = Depends(get_db),
+    db: DatabaseSession,
 ):
     try:
         db.execute(text("SELECT 1"))
@@ -82,7 +100,7 @@ def demo_service_status():
 )
 def add_deployment(
     payload: DeploymentCreate,
-    db: Session = Depends(get_db),
+    db: DatabaseSession,
 ):
     return create_deployment(db, payload)
 
@@ -92,6 +110,50 @@ def add_deployment(
     response_model=list[DeploymentRead],
 )
 def deployments(
-    db: Session = Depends(get_db),
+    db: DatabaseSession,
 ):
     return list_deployments(db)
+
+
+@app.post(
+    "/api/incidents",
+    response_model=IncidentRead,
+    status_code=201,
+)
+def add_incident(
+    payload: IncidentCreate,
+    db: DatabaseSession,
+):
+    return create_incident(db, payload)
+
+
+@app.get(
+    "/api/incidents",
+    response_model=list[IncidentRead],
+)
+def incidents(
+    db: DatabaseSession,
+):
+    return list_incidents(db)
+
+
+@app.post(
+    "/api/incidents/{incident_id}/resolve",
+    response_model=IncidentRead,
+)
+def resolve_existing_incident(
+    incident_id: int,
+    db: DatabaseSession,
+):
+    incident = resolve_incident(
+        db,
+        incident_id,
+    )
+
+    if incident is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
+    return incident

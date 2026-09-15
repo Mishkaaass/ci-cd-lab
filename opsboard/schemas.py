@@ -22,3 +22,32 @@ class DeploymentRead(DeploymentCreate):
 
     id: int
     created_at: datetime
+
+
+class IncidentCreate(BaseModel):
+    service: str
+    severity: Literal[
+        "info",
+        "warning",
+        "critical",
+    ]
+    reason: str
+
+
+class IncidentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    service: str
+    severity: Literal[
+        "info",
+        "warning",
+        "critical",
+    ]
+    reason: str
+    status: Literal[
+        "active",
+        "resolved",
+    ]
+    created_at: datetime
+    resolved_at: datetime | None
