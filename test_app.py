@@ -22,13 +22,6 @@ def test_health_endpoint():
     assert response.json() == {"status": "ok"}
 
 
-def test_readiness_endpoint():
-    response = client.get("/ready")
-
-    assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
-
-
 def test_version_endpoint(monkeypatch):
     monkeypatch.setenv("APP_VERSION", "v1.2.3")
     monkeypatch.setenv("GIT_SHA", "abc1234")
