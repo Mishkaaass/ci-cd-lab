@@ -1,17 +1,34 @@
-from flask import Flask, jsonify
+import os
 
-app = Flask(__name__)
+from fastapi import FastAPI
+
+app = FastAPI(
+    title="OpsBoard API",
+    version="0.1.0",
+)
 
 
 @app.get("/")
 def home():
-    return jsonify(message="Hello from CI/CD!")
+    return {
+        "message": "OpsBoard API",
+        "status": "running",
+    }
 
 
 @app.get("/health")
 def health():
-    return jsonify(status="ok"), 200
+    return {"status": "ok"}
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+@app.get("/ready")
+def readiness():
+    return {"status": "ready"}
+
+
+@app.get("/version")
+def version():
+    return {
+        "version": os.getenv("APP_VERSION", "dev"),
+        "git_sha": os.getenv("GIT_SHA", "local"),
+    }
