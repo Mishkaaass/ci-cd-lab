@@ -13,19 +13,22 @@ def fetch_demo_service_status(base_url=None, client=None):
     owns_client = client is None
 
     if owns_client:
-        client = httpx.Client(timeout=2.0)
+        client = httpx.Client(timeout=3.0)
 
     try:
+        health_response = client.get(f"{base_url}/health")
+
+        ready_response = client.get(f"{base_url}/ready")
+
         start = time.perf_counter()
 
-        health_response = client.get(f"{base_url}/health")
+        probe_response = client.get(f"{base_url}/probe")
 
         latency_ms = round(
             (time.perf_counter() - start) * 1000,
             2,
         )
 
-        ready_response = client.get(f"{base_url}/ready")
         version_response = client.get(f"{base_url}/version")
 
         healthy = (
@@ -38,9 +41,11 @@ def fetch_demo_service_status(base_url=None, client=None):
             and ready_response.json().get("status") == "ready"
         )
 
+        probe_ok = probe_response.status_code == 200
+
         version_data = version_response.json()
 
-        if healthy and ready:
+        if healthy and ready and probe_ok:
             status = "healthy"
         elif healthy:
             status = "degraded"
@@ -52,8 +57,14 @@ def fetch_demo_service_status(base_url=None, client=None):
             "status": status,
             "ready": ready,
             "latency_ms": latency_ms,
-            "version": version_data.get("version", "unknown"),
-            "git_sha": version_data.get("git_sha", "unknown"),
+            "version": version_data.get(
+                "version",
+                "unknown",
+            ),
+            "git_sha": version_data.get(
+                "git_sha",
+                "unknown",
+            ),
         }
 
     except httpx.HTTPError:

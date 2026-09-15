@@ -6,10 +6,22 @@ from opsboard.monitor import fetch_demo_service_status
 def test_fetch_demo_service_status():
     def handler(request):
         if request.url.path == "/health":
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx.Response(
+                200,
+                json={"status": "ok"},
+            )
 
         if request.url.path == "/ready":
-            return httpx.Response(200, json={"status": "ready"})
+            return httpx.Response(
+                200,
+                json={"status": "ready"},
+            )
+
+        if request.url.path == "/probe":
+            return httpx.Response(
+                200,
+                json={"status": "ok"},
+            )
 
         if request.url.path == "/version":
             return httpx.Response(
@@ -17,6 +29,7 @@ def test_fetch_demo_service_status():
                 json={
                     "version": "v1.0.0",
                     "git_sha": "abc1234",
+                    "mode": "healthy",
                 },
             )
 
