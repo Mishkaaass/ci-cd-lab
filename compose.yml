@@ -33,9 +33,9 @@ services:
     image: opsboard-demo:blue-local
 
     environment:
-      DEMO_MODE: healthy
-      APP_VERSION: v1.3.0
-      GIT_SHA: good123
+      DEMO_MODE: ${BLUE_MODE:-healthy}
+      APP_VERSION: ${BLUE_VERSION:-v1.3.0}
+      GIT_SHA: ${BLUE_SHA:-good123}
 
     ports:
       - "127.0.0.1:8001:8000"
@@ -63,9 +63,9 @@ services:
     image: opsboard-demo:green-local
 
     environment:
-      DEMO_MODE: broken
-      APP_VERSION: v1.4.0
-      GIT_SHA: bad456
+      DEMO_MODE: ${GREEN_MODE:-healthy}
+      APP_VERSION: ${GREEN_VERSION:-v1.4.1}
+      GIT_SHA: ${GREEN_SHA:-good789}
 
     ports:
       - "127.0.0.1:8002:8000"
@@ -80,7 +80,7 @@ services:
         ]
       interval: 5s
       timeout: 3s
-      retries: 3
+      retries: 5
 
     restart: unless-stopped
 
