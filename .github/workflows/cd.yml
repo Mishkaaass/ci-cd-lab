@@ -50,23 +50,110 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
 
-      - name: Verify published image
-        env:
-          IMAGE: ${{ steps.image.outputs.name }}:sha-${{ github.event.workflow_run.head_sha }}
-        run: |
-          docker pull "$IMAGE"
-          docker run -d --name ci-cd-lab-smoke -p 5000:5000 "$IMAGE"
+      - name: Create smoke test network
+        run: docker network create opsboard-smoke
 
-          for attempt in {1..15}; do
-            if curl --fail --silent http://127.0.0.1:5000/health | grep -q '"status":"ok"'; then
-              echo "Health check passed"
+      - name: Start smoke test database
+        run: |
+          docker run -d \
+            --name opsboard-smoke-db \
+            --network opsboard-smoke \
+            -e POSTGRES_DB=opsboard \
+            -e POSTGRES_USER=opsboard \
+            -e POSTGRES_PASSWORD=opsboard_smoke_password \
+            postgres:18-alpine
+
+          for attempt in {1..20}; do
+            if docker exec opsboard-smoke-db \
+              pg_isready \
+              -U opsboard \
+              -d opsboard
+            then
+              echo "PostgreSQL is ready"
               exit 0
             fi
+
             sleep 1
           done
 
-          docker logs ci-cd-lab-smoke
+          docker logs opsboard-smoke-db
           exit 1
+
+      - name: Verify published image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}:sha-${{ github.event.workflow_run.head_sha }}
+          GIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          docker pull "$IMAGE"
+
+          docker run -d \
+            --name ci-cd-lab-smoke \
+            --network opsboard-smoke \
+            -p 8000:8000 \
+            -e APP_ENV=ci \
+            -e APP_VERSION="sha-${GIT_SHA:0:7}" \
+            -e GIT_SHA="$GIT_SHA" \
+            -e DATABASE_URL="postgresql+psycopg://opsboard:opsboard_smoke_password@opsboard-smoke-db:5432/opsboard" \
+            "$IMAGE"
+
+          for attempt in {1..20}; do
+            HEALTH_OK=false
+            READY_OK=false
+
+            if curl \
+              --fail \
+              --silent \
+              http://127.0.0.1:8000/health \
+              | grep -q '"status":"ok"'
+            then
+              HEALTH_OK=true
+            fi
+
+            if curl \
+              --fail \
+              --silent \
+              http://127.0.0.1:8000/ready \
+              | grep -q '"status":"ready"'
+            then
+              READY_OK=true
+            fi
+
+            if [[ "$HEALTH_OK" == "true" && "$READY_OK" == "true" ]]; then
+              echo "Health and readiness checks passed"
+              break
+            fi
+
+            if [[ "$attempt" == "20" ]]; then
+              echo "Smoke test failed"
+              docker logs ci-cd-lab-smoke
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          VERSION_JSON=$(
+            curl \
+              --fail \
+              --silent \
+              http://127.0.0.1:8000/version
+          )
+
+          echo "Published release:"
+          echo "$VERSION_JSON"
+
+          ACTUAL_SHA=$(
+            echo "$VERSION_JSON" \
+              | python3 -c \
+              'import json,sys; print(json.load(sys.stdin)["git_sha"])'
+          )
+
+          if [[ "$ACTUAL_SHA" != "$GIT_SHA" ]]; then
+            echo "Published image Git SHA does not match tested commit"
+            exit 1
+          fi
+
+          echo "Published image verified successfully"
 
       - name: Promote verified image to latest
         env:
@@ -77,6 +164,9 @@ jobs:
             --tag "$LATEST" \
             "$CANDIDATE"
 
-      - name: Cleanup smoke test container
+      - name: Cleanup smoke test
         if: always()
-        run: docker rm -f ci-cd-lab-smoke || true
+        run: |
+          docker rm -f ci-cd-lab-smoke || true
+          docker rm -f opsboard-smoke-db || true
+          docker network rm opsboard-smoke || true
