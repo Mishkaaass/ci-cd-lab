@@ -1,8 +1,17 @@
 import os
+import re
+from collections.abc import Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+)
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,8 +30,16 @@ from opsboard.incidents import (
     resolve_incident,
 )
 from opsboard.monitor import fetch_demo_service_status
+from opsboard.operation_executor import dispatch_operation
+from opsboard.operations import (
+    get_operation,
+    list_operations,
+    queue_operation,
+)
 from opsboard.schemas import (
     DeploymentCreate,
+    DeploymentOperationRead,
+    DeploymentOperationRequest,
     DeploymentRead,
     IncidentCreate,
     IncidentRead,
@@ -33,10 +50,67 @@ DatabaseSession = Annotated[
     Depends(get_db),
 ]
 
+OperationDispatcher = Callable[[int], None]
+
+NGINX_ACTIVE_BACKEND_CONFIG = Path("nginx/active_backend.inc")
+
+ACTIVE_BACKEND_PATTERN = re.compile(
+    r"^\s*server demo-(blue|green):8000;\s*$",
+    re.MULTILINE,
+)
+
+
+def get_operation_dispatcher() -> OperationDispatcher:
+    return dispatch_operation
+
+
+OperationDispatcherDependency = Annotated[
+    OperationDispatcher,
+    Depends(get_operation_dispatcher),
+]
+
+
+def resolve_inactive_slot(
+    config_path: str | Path = NGINX_ACTIVE_BACKEND_CONFIG,
+) -> str:
+    content = Path(
+        config_path,
+    ).read_text()
+
+    matches = ACTIVE_BACKEND_PATTERN.findall(
+        content,
+    )
+
+    if len(matches) != 1:
+        raise ValueError("Unable to determine active production slot")
+
+    active_slot = matches[0]
+
+    if active_slot == "blue":
+        return "green"
+
+    return "blue"
+
+
+def deployment_target_slot() -> str:
+    try:
+        return resolve_inactive_slot()
+    except (
+        OSError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=("Unable to determine active production slot"),
+        ) from exc
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(
+        bind=engine,
+    )
+
     yield
 
 
@@ -48,7 +122,9 @@ app = FastAPI(
 
 app.mount(
     "/static",
-    StaticFiles(directory="static"),
+    StaticFiles(
+        directory="static",
+    ),
     name="static",
 )
 
@@ -75,14 +151,25 @@ def dashboard(
 ):
     service = fetch_demo_service_status()
 
-    deployments = list_deployments(db)[:10]
-    incidents = list_incidents(db)[:10]
+    deployments = list_deployments(
+        db,
+    )[:10]
+
+    incidents = list_incidents(
+        db,
+    )[:10]
+
+    operations = list_operations(
+        db,
+    )[:10]
 
     active_incidents = [
         incident for incident in incidents if incident.status == "active"
     ]
 
     latest_deployment = deployments[0] if deployments else None
+
+    latest_operation = operations[0] if operations else None
 
     return templates.TemplateResponse(
         request=request,
@@ -94,16 +181,20 @@ def dashboard(
             ),
             "service": service,
             "deployments": deployments,
-            "latest_deployment": latest_deployment,
+            "latest_deployment": (latest_deployment),
             "incidents": incidents,
-            "active_incidents": active_incidents,
+            "active_incidents": (active_incidents),
+            "operations": operations,
+            "latest_operation": (latest_operation),
         },
     )
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+    }
 
 
 @app.get("/ready")
@@ -111,7 +202,9 @@ def readiness(
     db: DatabaseSession,
 ):
     try:
-        db.execute(text("SELECT 1"))
+        db.execute(
+            text("SELECT 1"),
+        )
 
         return {
             "status": "ready",
@@ -169,7 +262,9 @@ def add_deployment(
 def deployments(
     db: DatabaseSession,
 ):
-    return list_deployments(db)
+    return list_deployments(
+        db,
+    )
 
 
 @app.post(
@@ -194,7 +289,9 @@ def add_incident(
 def incidents(
     db: DatabaseSession,
 ):
-    return list_incidents(db)
+    return list_incidents(
+        db,
+    )
 
 
 @app.post(
@@ -217,3 +314,157 @@ def resolve_existing_incident(
         )
 
     return incident
+
+
+def queue_or_conflict(
+    db: Session,
+    *,
+    action: str,
+    slot: str | None = None,
+    version: str | None = None,
+    git_sha: str | None = None,
+):
+    operation = queue_operation(
+        db,
+        action=action,
+        slot=slot,
+        version=version,
+        git_sha=git_sha,
+    )
+
+    if operation is None:
+        raise HTTPException(
+            status_code=409,
+            detail=("Another deployment operation is already active"),
+        )
+
+    return operation
+
+
+def schedule_operation(
+    background_tasks: BackgroundTasks,
+    dispatcher: OperationDispatcher,
+    operation_id: int,
+) -> None:
+    background_tasks.add_task(
+        dispatcher,
+        operation_id,
+    )
+
+
+@app.post(
+    "/api/operations/deploy-healthy",
+    response_model=DeploymentOperationRead,
+    status_code=202,
+)
+def deploy_healthy(
+    payload: DeploymentOperationRequest,
+    background_tasks: BackgroundTasks,
+    db: DatabaseSession,
+    dispatcher: OperationDispatcherDependency,
+):
+    slot = deployment_target_slot()
+
+    operation = queue_or_conflict(
+        db,
+        action="deploy_healthy",
+        slot=slot,
+        version=payload.version,
+        git_sha=payload.git_sha,
+    )
+
+    schedule_operation(
+        background_tasks,
+        dispatcher,
+        operation.id,
+    )
+
+    return operation
+
+
+@app.post(
+    "/api/operations/deploy-broken",
+    response_model=DeploymentOperationRead,
+    status_code=202,
+)
+def deploy_broken(
+    payload: DeploymentOperationRequest,
+    background_tasks: BackgroundTasks,
+    db: DatabaseSession,
+    dispatcher: OperationDispatcherDependency,
+):
+    slot = deployment_target_slot()
+
+    operation = queue_or_conflict(
+        db,
+        action="deploy_broken",
+        slot=slot,
+        version=payload.version,
+        git_sha=payload.git_sha,
+    )
+
+    schedule_operation(
+        background_tasks,
+        dispatcher,
+        operation.id,
+    )
+
+    return operation
+
+
+@app.post(
+    "/api/operations/rollback",
+    response_model=DeploymentOperationRead,
+    status_code=202,
+)
+def rollback(
+    background_tasks: BackgroundTasks,
+    db: DatabaseSession,
+    dispatcher: OperationDispatcherDependency,
+):
+    operation = queue_or_conflict(
+        db,
+        action="rollback",
+    )
+
+    schedule_operation(
+        background_tasks,
+        dispatcher,
+        operation.id,
+    )
+
+    return operation
+
+
+@app.get(
+    "/api/operations",
+    response_model=list[DeploymentOperationRead],
+)
+def operations(
+    db: DatabaseSession,
+):
+    return list_operations(
+        db,
+    )
+
+
+@app.get(
+    "/api/operations/{operation_id}",
+    response_model=DeploymentOperationRead,
+)
+def operation(
+    operation_id: int,
+    db: DatabaseSession,
+):
+    result = get_operation(
+        db,
+        operation_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=("Operation not found"),
+        )
+
+    return result

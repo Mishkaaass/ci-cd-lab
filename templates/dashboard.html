@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>OpsBoard</title>
 
@@ -11,7 +14,10 @@
         href="{{ url_for('static', path='/styles.css') }}"
     >
 
-    <meta http-equiv="refresh" content="5">
+    <script
+        src="{{ url_for('static', path='/dashboard.js') }}"
+        defer
+    ></script>
 </head>
 
 <body>
@@ -19,9 +25,14 @@
 <div class="shell">
 
     <header class="topbar">
+
         <div>
-            <p class="eyebrow">PRODUCTION CONTROL</p>
+            <p class="eyebrow">
+                PRODUCTION CONTROL
+            </p>
+
             <h1>OpsBoard</h1>
+
             <p class="subtitle">
                 Deployment, service health and incident visibility
             </p>
@@ -31,6 +42,7 @@
             <span class="pulse"></span>
             {{ environment | upper }}
         </div>
+
     </header>
 
 
@@ -39,23 +51,35 @@
         <article class="card service-card">
 
             <div class="card-header">
+
                 <div>
-                    <p class="card-label">SERVICE</p>
-                    <h2>{{ service.name }}</h2>
+                    <p class="card-label">
+                        SERVICE
+                    </p>
+
+                    <h2 id="service-name">
+                        {{ service.name }}
+                    </h2>
                 </div>
 
-                <span class="status status-{{ service.status }}">
+                <span
+                    id="service-status"
+                    class="status status-{{ service.status }}"
+                >
                     {{ service.status | capitalize }}
                 </span>
+
             </div>
 
 
             <div class="metrics">
 
                 <div class="metric">
-                    <span class="metric-label">LATENCY</span>
+                    <span class="metric-label">
+                        LATENCY
+                    </span>
 
-                    <strong>
+                    <strong id="service-latency">
                         {% if service.latency_ms is not none %}
                             {{ service.latency_ms }} ms
                         {% else %}
@@ -66,9 +90,11 @@
 
 
                 <div class="metric">
-                    <span class="metric-label">READINESS</span>
+                    <span class="metric-label">
+                        READINESS
+                    </span>
 
-                    <strong>
+                    <strong id="service-readiness">
                         {% if service.ready %}
                             Ready
                         {% else %}
@@ -79,14 +105,27 @@
 
 
                 <div class="metric">
-                    <span class="metric-label">VERSION</span>
-                    <strong>{{ service.version }}</strong>
+                    <span class="metric-label">
+                        VERSION
+                    </span>
+
+                    <strong id="service-version">
+                        {{ service.version }}
+                    </strong>
                 </div>
 
 
                 <div class="metric">
-                    <span class="metric-label">COMMIT</span>
-                    <strong class="mono">{{ service.git_sha }}</strong>
+                    <span class="metric-label">
+                        COMMIT
+                    </span>
+
+                    <strong
+                        id="service-git-sha"
+                        class="mono"
+                    >
+                        {{ service.git_sha }}
+                    </strong>
                 </div>
 
             </div>
@@ -94,56 +133,55 @@
         </article>
 
 
-        <article class="card">
+        <article class="card production-card">
 
-            <p class="card-label">CURRENT DEPLOYMENT</p>
+            <p class="card-label">
+                ACTIVE PRODUCTION
+            </p>
 
-            {% if latest_deployment %}
+            <div
+                id="production-version"
+                class="deployment-version"
+            >
+                {{ service.version }}
+            </div>
 
-                <div class="deployment-version">
-                    {{ latest_deployment.version }}
-                </div>
+            <div class="detail-row">
+                <span>Commit</span>
 
-                <div class="detail-row">
-                    <span>Status</span>
+                <strong
+                    id="production-git-sha"
+                    class="mono"
+                >
+                    {{ service.git_sha }}
+                </strong>
+            </div>
 
-                    <strong>
-                        {{ latest_deployment.status | capitalize }}
-                    </strong>
-                </div>
+            <div class="detail-row">
+                <span>Readiness</span>
 
-                <div class="detail-row">
-                    <span>Commit</span>
+                <strong id="production-readiness">
+                    {% if service.ready %}
+                        Ready
+                    {% else %}
+                        Not Ready
+                    {% endif %}
+                </strong>
+            </div>
 
-                    <strong class="mono">
-                        {{ latest_deployment.git_sha }}
-                    </strong>
-                </div>
-
-                <div class="detail-row">
-                    <span>Duration</span>
-
-                    <strong>
-                        {% if latest_deployment.duration_ms is not none %}
-                            {{ latest_deployment.duration_ms }} ms
-                        {% else %}
-                            —
-                        {% endif %}
-                    </strong>
-                </div>
-
-            {% else %}
-
-                <p class="empty">No deployments recorded yet.</p>
-
-            {% endif %}
+            <div class="detail-row">
+                <span>Source</span>
+                <strong>Routed service</strong>
+            </div>
 
         </article>
 
 
         <article class="card">
 
-            <p class="card-label">INCIDENT STATUS</p>
+            <p class="card-label">
+                INCIDENT STATUS
+            </p>
 
             <div class="big-number">
                 {{ active_incidents | length }}
@@ -156,6 +194,7 @@
             {% if active_incidents %}
 
                 <div class="incident-summary">
+
                     <span class="severity">
                         {{ active_incidents[0].severity | upper }}
                     </span>
@@ -163,6 +202,7 @@
                     <strong>
                         {{ active_incidents[0].reason }}
                     </strong>
+
                 </div>
 
             {% else %}
@@ -178,15 +218,418 @@
     </section>
 
 
+    <section class="control-grid">
+
+        <article class="card control-card">
+
+            <div class="card-header">
+
+                <div>
+                    <p class="card-label">
+                        CONTROL PLANE
+                    </p>
+
+                    <h2>
+                        Deployment Control
+                    </h2>
+                </div>
+
+                <span class="safe-badge">
+                    ALLOW-LISTED ACTIONS
+                </span>
+
+            </div>
+
+
+            <p class="control-description">
+                Submit a constrained deployment operation.
+                OpsBoard automatically selects the inactive
+                Blue/Green slot. The browser never sends
+                shell commands or production routing decisions.
+            </p>
+
+
+            <div class="deployment-form">
+
+                <div class="form-field">
+
+                    <span>
+                        TARGET SLOT
+                    </span>
+
+                    <strong>
+                        Automatic inactive slot
+                    </strong>
+
+                </div>
+
+
+                <label class="form-field">
+
+                    <span>
+                        VERSION
+                    </span>
+
+                    <input
+                        id="deployment-version"
+                        type="text"
+                        maxlength="64"
+                        placeholder="v2.0.0"
+                        autocomplete="off"
+                    >
+
+                </label>
+
+
+                <label class="form-field">
+
+                    <span>
+                        GIT SHA
+                    </span>
+
+                    <input
+                        id="deployment-git-sha"
+                        type="text"
+                        maxlength="64"
+                        placeholder="abc1234"
+                        autocomplete="off"
+                    >
+
+                </label>
+
+            </div>
+
+
+            <div class="action-row">
+
+                <button
+                    id="deploy-healthy-button"
+                    class="button button-primary"
+                    type="button"
+                >
+                    Deploy Healthy
+                </button>
+
+                <button
+                    id="deploy-broken-button"
+                    class="button button-danger"
+                    type="button"
+                >
+                    Deploy Broken
+                </button>
+
+                <button
+                    id="rollback-button"
+                    class="button button-secondary"
+                    type="button"
+                >
+                    Rollback
+                </button>
+
+            </div>
+
+
+            <div
+                id="control-feedback"
+                class="control-feedback"
+                aria-live="polite"
+            >
+                Ready for an approved operation.
+            </div>
+
+        </article>
+
+
+        <article class="card slot-card">
+
+            <div class="card-header">
+
+                <div>
+                    <p class="card-label">
+                        BLUE / GREEN
+                    </p>
+
+                    <h2>
+                        Deployment Slots
+                    </h2>
+                </div>
+
+            </div>
+
+
+            <div class="slots">
+
+                <div
+                    id="blue-slot"
+                    class="slot"
+                >
+
+                    <span class="slot-dot blue"></span>
+
+                    <div>
+                        <strong>BLUE</strong>
+
+                        <p id="blue-slot-state">
+                            {% if latest_operation
+                                and latest_operation.slot == "blue" %}
+                                Latest target
+                            {% else %}
+                                —
+                            {% endif %}
+                        </p>
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="green-slot"
+                    class="slot"
+                >
+
+                    <span class="slot-dot green"></span>
+
+                    <div>
+                        <strong>GREEN</strong>
+
+                        <p id="green-slot-state">
+                            {% if latest_operation
+                                and latest_operation.slot == "green" %}
+                                Latest target
+                            {% else %}
+                                —
+                            {% endif %}
+                        </p>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <p class="slot-note">
+                OpsBoard selects the inactive slot automatically.
+                Active production identity is taken from the routed
+                service above.
+            </p>
+
+        </article>
+
+    </section>
+
+
+    <section class="operation-grid">
+
+        <article class="card operation-card">
+
+            <div class="card-header">
+
+                <div>
+                    <p class="card-label">
+                        LIVE OPERATION
+                    </p>
+
+                    <h2>
+                        Live Deployment Timeline
+                    </h2>
+                </div>
+
+                <span
+                    id="operation-status"
+                    class="operation-status"
+                >
+                    {% if latest_operation %}
+                        {{ latest_operation.status | upper }}
+                    {% else %}
+                        IDLE
+                    {% endif %}
+                </span>
+
+            </div>
+
+
+            <div class="operation-meta">
+
+                <div>
+                    <span>Operation</span>
+
+                    <strong id="operation-id">
+                        {% if latest_operation %}
+                            #{{ latest_operation.id }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Action</span>
+
+                    <strong id="operation-action">
+                        {% if latest_operation %}
+                            {{ latest_operation.action }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Version</span>
+
+                    <strong id="operation-version">
+                        {% if latest_operation
+                            and latest_operation.version %}
+                            {{ latest_operation.version }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span>Commit</span>
+
+                    <strong
+                        id="operation-git-sha"
+                        class="mono"
+                    >
+                        {% if latest_operation
+                            and latest_operation.git_sha %}
+                            {{ latest_operation.git_sha }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div
+                id="operation-timeline"
+                class="timeline"
+            >
+
+                {% if latest_operation %}
+
+                    {% for step in latest_operation.steps %}
+
+                        <div
+                            class="timeline-step
+                                   timeline-{{ step.status }}"
+                        >
+
+                            <div class="timeline-marker"></div>
+
+                            <div>
+                                <strong>
+                                    {{ step.name }}
+                                </strong>
+
+                                <span>
+                                    {{ step.status | capitalize }}
+                                </span>
+                            </div>
+
+                        </div>
+
+                    {% endfor %}
+
+                {% else %}
+
+                    <p class="empty">
+                        No deployment operation recorded yet.
+                    </p>
+
+                {% endif %}
+
+            </div>
+
+        </article>
+
+
+        <article class="card">
+
+            <div class="card-header">
+
+                <div>
+                    <p class="card-label">
+                        RECENT OPERATIONS
+                    </p>
+
+                    <h2>
+                        Control History
+                    </h2>
+                </div>
+
+            </div>
+
+
+            <div
+                id="operation-history"
+                class="operation-history"
+            >
+
+                {% for operation in operations %}
+
+                    <div class="operation-history-row">
+
+                        <div>
+                            <strong>
+                                #{{ operation.id }}
+                                {{ operation.action }}
+                            </strong>
+
+                            <p>
+                                {% if operation.version %}
+                                    {{ operation.version }}
+                                {% else %}
+                                    rollback
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <span>
+                            {{ operation.status | upper }}
+                        </span>
+
+                    </div>
+
+                {% else %}
+
+                    <p class="empty">
+                        No operations recorded.
+                    </p>
+
+                {% endfor %}
+
+            </div>
+
+        </article>
+
+    </section>
+
+
     <section class="table-grid">
 
         <article class="card">
 
             <div class="card-header">
+
                 <div>
-                    <p class="card-label">HISTORY</p>
-                    <h2>Recent Deployments</h2>
+                    <p class="card-label">
+                        HISTORY
+                    </p>
+
+                    <h2>
+                        Recent Deployments
+                    </h2>
                 </div>
+
             </div>
 
 
@@ -241,10 +684,17 @@
         <article class="card">
 
             <div class="card-header">
+
                 <div>
-                    <p class="card-label">OPERATIONS</p>
-                    <h2>Incident History</h2>
+                    <p class="card-label">
+                        OPERATIONS
+                    </p>
+
+                    <h2>
+                        Incident History
+                    </h2>
                 </div>
+
             </div>
 
 
@@ -294,11 +744,11 @@
     <footer>
 
         <span>
-            Auto refresh: 5 seconds
+            Live API polling enabled
         </span>
 
         <span>
-            Real service telemetry — no simulated metrics
+            Real operation state — no fake progress
         </span>
 
     </footer>
