@@ -1,15 +1,19 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from opsboard.models import (
     DeploymentOperation,
     OperationStep,
 )
+from opsboard.operation_lock import DeploymentOperationLock
 
 ACTIVE_OPERATION_STATUSES = {
     "queued",
     "running",
 }
+
+OPERATION_LOCK_NAME = "deployment"
 
 DEPLOYMENT_STEP_NAMES = [
     "Candidate selected",
@@ -27,6 +31,35 @@ ROLLBACK_STEP_NAMES = [
     "Traffic switched",
     "Production converged",
 ]
+
+
+def acquire_operation_lock(
+    db: Session,
+) -> bool:
+    lock = DeploymentOperationLock(
+        name=OPERATION_LOCK_NAME,
+    )
+
+    db.add(lock)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return False
+
+    return True
+
+
+def release_operation_lock(
+    db: Session,
+) -> None:
+    statement = delete(DeploymentOperationLock).where(
+        DeploymentOperationLock.name == OPERATION_LOCK_NAME
+    )
+
+    db.execute(statement)
+    db.commit()
 
 
 def create_operation(
@@ -95,19 +128,27 @@ def queue_operation(
     if get_active_operation(db) is not None:
         return None
 
+    if not acquire_operation_lock(db):
+        return None
+
     if action == "rollback":
         step_names = ROLLBACK_STEP_NAMES
     else:
         step_names = DEPLOYMENT_STEP_NAMES
 
-    return create_operation(
-        db,
-        action=action,
-        step_names=step_names,
-        slot=slot,
-        version=version,
-        git_sha=git_sha,
-    )
+    try:
+        return create_operation(
+            db,
+            action=action,
+            step_names=step_names,
+            slot=slot,
+            version=version,
+            git_sha=git_sha,
+        )
+    except Exception:
+        db.rollback()
+        release_operation_lock(db)
+        raise
 
 
 def get_operation(

@@ -10,7 +10,10 @@ from opsboard.deployment_runner import (
     DEFAULT_DEPLOYMENT_TIMEOUT_SECONDS,
     run_deployment_action,
 )
-from opsboard.operations import get_operation
+from opsboard.operations import (
+    get_operation,
+    release_operation_lock,
+)
 
 Runner = Callable[..., object]
 
@@ -65,7 +68,7 @@ def execute_operation(
 
     operation.finished_at = utc_now()
 
-    db.commit()
+    release_operation_lock(db)
 
 
 def execute_operation_by_id(
