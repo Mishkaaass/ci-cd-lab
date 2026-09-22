@@ -51,3 +51,39 @@ class IncidentRead(BaseModel):
     ]
     created_at: datetime
     resolved_at: datetime | None
+
+
+class OperationStepRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    position: int
+    name: str
+    status: Literal[
+        "pending",
+        "running",
+        "success",
+        "failed",
+    ]
+    created_at: datetime
+
+
+class DeploymentOperationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    action: Literal[
+        "deploy_healthy",
+        "deploy_broken",
+        "rollback",
+    ]
+    status: Literal[
+        "queued",
+        "running",
+        "success",
+        "failed",
+    ]
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    steps: list[OperationStepRead]
