@@ -21,6 +21,17 @@ PRODUCTION_URL="${PRODUCTION_URL:-http://127.0.0.1:8080}"
 NGINX_CONFIG="nginx/active_backend.inc"
 
 
+emit_step() {
+    local status="$1"
+    local name="$2"
+
+    printf \
+        'OPSBOARD_STEP|%s|%s\n' \
+        "$status" \
+        "$name"
+}
+
+
 CURRENT=$(
     sed -n \
         's/server demo-\([a-z]*\):8000;/\1/p' \
@@ -62,6 +73,16 @@ echo "Rollback target    : $TARGET"
 echo
 
 
+emit_step \
+    "success" \
+    "Rollback target selected"
+
+
+emit_step \
+    "running" \
+    "Target readiness verified"
+
+
 echo "[1/4] Checking rollback target readiness..."
 
 if ! curl \
@@ -70,33 +91,64 @@ if ! curl \
     "http://127.0.0.1:${PORT}/ready" \
     >/dev/null
 then
+    emit_step \
+        "failed" \
+        "Target readiness verified"
+
     echo
     echo "ROLLBACK BLOCKED"
     echo "Previous slot is not ready."
+
     exit 1
 fi
 
 
-VERSION_JSON=$(
+if ! VERSION_JSON=$(
     curl \
         --fail \
         --silent \
         "http://127.0.0.1:${PORT}/version"
 )
+then
+    emit_step \
+        "failed" \
+        "Target readiness verified"
+
+    exit 1
+fi
 
 
-VERSION=$(
+if ! VERSION=$(
     echo "$VERSION_JSON" |
         python3 -c \
         'import json,sys; print(json.load(sys.stdin)["version"])'
 )
+then
+    emit_step \
+        "failed" \
+        "Target readiness verified"
+
+    exit 1
+fi
 
 
-GIT_SHA=$(
+if ! GIT_SHA=$(
     echo "$VERSION_JSON" |
         python3 -c \
         'import json,sys; print(json.load(sys.stdin)["git_sha"])'
 )
+then
+    emit_step \
+        "failed" \
+        "Target readiness verified"
+
+    exit 1
+fi
+
+
+emit_step \
+    "success" \
+    "Target readiness verified"
 
 
 echo "Rollback release:"
@@ -104,6 +156,11 @@ echo "$VERSION_JSON"
 
 
 START_MS=$(python3 -m opsboard.timing)
+
+
+emit_step \
+    "running" \
+    "Traffic switched"
 
 
 echo
@@ -118,8 +175,32 @@ printf \
 echo
 echo "[3/4] Validating and reloading Nginx..."
 
-sudo docker compose exec -T nginx nginx -t
-sudo docker compose exec -T nginx nginx -s reload
+if ! sudo docker compose exec -T nginx nginx -t; then
+    emit_step \
+        "failed" \
+        "Traffic switched"
+
+    exit 1
+fi
+
+
+if ! sudo docker compose exec -T nginx nginx -s reload; then
+    emit_step \
+        "failed" \
+        "Traffic switched"
+
+    exit 1
+fi
+
+
+emit_step \
+    "success" \
+    "Traffic switched"
+
+
+emit_step \
+    "running" \
+    "Production converged"
 
 
 echo
@@ -133,10 +214,20 @@ if ! python3 \
     --attempts 20 \
     --delay 0.25
 then
+    emit_step \
+        "failed" \
+        "Production converged"
+
     echo
     echo "ROLLBACK VERIFICATION FAILED"
+
     exit 1
 fi
+
+
+emit_step \
+    "success" \
+    "Production converged"
 
 
 END_MS=$(python3 -m opsboard.timing)

@@ -26,6 +26,17 @@ PRODUCTION_URL="${PRODUCTION_URL:-http://127.0.0.1:8080}"
 NGINX_CONFIG="nginx/active_backend.inc"
 
 
+emit_step() {
+    local status="$1"
+    local name="$2"
+
+    printf \
+        'OPSBOARD_STEP|%s|%s\n' \
+        "$status" \
+        "$name"
+}
+
+
 if [[ -z "$TARGET" || -z "$VERSION" || -z "$GIT_SHA" ]]; then
     echo "Usage:"
     echo "  $0 blue|green VERSION GIT_SHA healthy|broken"
@@ -192,12 +203,21 @@ echo "Mode               : $MODE"
 echo
 
 
+emit_step \
+    "success" \
+    "Candidate selected"
+
+
 echo "[1/5] Starting candidate container..."
+
+emit_step \
+    "running" \
+    "Container started"
 
 
 if [[ "$TARGET" == "blue" ]]; then
 
-    sudo env \
+    if ! sudo env \
         BLUE_MODE="$MODE" \
         BLUE_VERSION="$VERSION" \
         BLUE_SHA="$GIT_SHA" \
@@ -206,10 +226,19 @@ if [[ "$TARGET" == "blue" ]]; then
         --no-deps \
         --force-recreate \
         "$SERVICE"
+    then
+        emit_step \
+            "failed" \
+            "Container started"
+
+        record_failure
+
+        exit 1
+    fi
 
 else
 
-    sudo env \
+    if ! sudo env \
         GREEN_MODE="$MODE" \
         GREEN_VERSION="$VERSION" \
         GREEN_SHA="$GIT_SHA" \
@@ -218,12 +247,31 @@ else
         --no-deps \
         --force-recreate \
         "$SERVICE"
+    then
+        emit_step \
+            "failed" \
+            "Container started"
+
+        record_failure
+
+        exit 1
+    fi
 
 fi
 
 
+emit_step \
+    "success" \
+    "Container started"
+
+
 echo
 echo "[2/5] Waiting for candidate readiness..."
+
+emit_step \
+    "running" \
+    "Readiness check"
+
 
 READY=false
 
@@ -247,6 +295,10 @@ done
 
 if [[ "$READY" != "true" ]]; then
 
+    emit_step \
+        "failed" \
+        "Readiness check"
+
     echo
     echo "========================================"
     echo " DEPLOYMENT FAILED"
@@ -262,37 +314,79 @@ if [[ "$READY" != "true" ]]; then
 fi
 
 
+emit_step \
+    "success" \
+    "Readiness check"
+
+
 echo "Candidate is READY."
+
+
+emit_step \
+    "running" \
+    "Release identity verified"
 
 
 echo
 echo "Candidate runtime identity:"
 
-CANDIDATE_JSON=$(
+if ! CANDIDATE_JSON=$(
     curl \
         --fail \
         --silent \
         "http://127.0.0.1:${PORT}/version"
 )
+then
+    emit_step \
+        "failed" \
+        "Release identity verified"
+
+    record_failure
+
+    exit 1
+fi
+
 
 echo "$CANDIDATE_JSON"
 
 
-CANDIDATE_VERSION=$(
+if ! CANDIDATE_VERSION=$(
     echo "$CANDIDATE_JSON" |
         python3 -c \
         'import json,sys; print(json.load(sys.stdin)["version"])'
 )
+then
+    emit_step \
+        "failed" \
+        "Release identity verified"
+
+    record_failure
+
+    exit 1
+fi
 
 
-CANDIDATE_SHA=$(
+if ! CANDIDATE_SHA=$(
     echo "$CANDIDATE_JSON" |
         python3 -c \
         'import json,sys; print(json.load(sys.stdin)["git_sha"])'
 )
+then
+    emit_step \
+        "failed" \
+        "Release identity verified"
+
+    record_failure
+
+    exit 1
+fi
 
 
 if [[ "$CANDIDATE_VERSION" != "$VERSION" || "$CANDIDATE_SHA" != "$GIT_SHA" ]]; then
+
+    emit_step \
+        "failed" \
+        "Release identity verified"
 
     echo
     echo "========================================"
@@ -315,8 +409,19 @@ if [[ "$CANDIDATE_VERSION" != "$VERSION" || "$CANDIDATE_SHA" != "$GIT_SHA" ]]; t
 fi
 
 
+emit_step \
+    "success" \
+    "Release identity verified"
+
+
 echo
 echo "[3/5] Preparing traffic switch..."
+
+
+emit_step \
+    "running" \
+    "Nginx configuration validated"
+
 
 printf \
     'server %s:8000;\n' \
@@ -329,6 +434,10 @@ echo "[4/5] Validating and reloading Nginx..."
 
 if ! sudo docker compose exec -T nginx nginx -t; then
 
+    emit_step \
+        "failed" \
+        "Nginx configuration validated"
+
     echo
     echo "Nginx configuration validation failed."
 
@@ -339,16 +448,50 @@ if ! sudo docker compose exec -T nginx nginx -t; then
 fi
 
 
-sudo docker compose exec -T nginx nginx -s reload
+emit_step \
+    "success" \
+    "Nginx configuration validated"
+
+
+emit_step \
+    "running" \
+    "Traffic switched"
+
+
+if ! sudo docker compose exec -T nginx nginx -s reload; then
+
+    emit_step \
+        "failed" \
+        "Traffic switched"
+
+    restore_previous_backend
+    record_failure
+
+    exit 1
+fi
+
+
+emit_step \
+    "success" \
+    "Traffic switched"
 
 
 echo
 echo "[5/5] Waiting for production convergence..."
 
+emit_step \
+    "running" \
+    "Production converged"
+
+
 if ! verify_production_release \
     "$VERSION" \
     "$GIT_SHA"
 then
+
+    emit_step \
+        "failed" \
+        "Production converged"
 
     echo
     echo "========================================"
@@ -363,6 +506,11 @@ then
 
     exit 1
 fi
+
+
+emit_step \
+    "success" \
+    "Production converged"
 
 
 END_MS=$(python3 -m opsboard.timing)
