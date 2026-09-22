@@ -104,12 +104,15 @@ def dashboard(
 
     deployments = list_deployments(db)[:10]
     incidents = list_incidents(db)[:10]
+    operations = list_operations(db)[:10]
 
     active_incidents = [
         incident for incident in incidents if incident.status == "active"
     ]
 
     latest_deployment = deployments[0] if deployments else None
+
+    latest_operation = operations[0] if operations else None
 
     return templates.TemplateResponse(
         request=request,
@@ -124,6 +127,8 @@ def dashboard(
             "latest_deployment": latest_deployment,
             "incidents": incidents,
             "active_incidents": active_incidents,
+            "operations": operations,
+            "latest_operation": latest_operation,
         },
     )
 
