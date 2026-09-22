@@ -21,8 +21,15 @@ from opsboard.incidents import (
     resolve_incident,
 )
 from opsboard.monitor import fetch_demo_service_status
+from opsboard.operations import (
+    get_operation,
+    list_operations,
+    queue_operation,
+)
 from opsboard.schemas import (
     DeploymentCreate,
+    DeploymentOperationRead,
+    DeploymentOperationRequest,
     DeploymentRead,
     IncidentCreate,
     IncidentRead,
@@ -103,7 +110,9 @@ def dashboard(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+    }
 
 
 @app.get("/ready")
@@ -111,7 +120,9 @@ def readiness(
     db: DatabaseSession,
 ):
     try:
-        db.execute(text("SELECT 1"))
+        db.execute(
+            text("SELECT 1"),
+        )
 
         return {
             "status": "ready",
@@ -217,3 +228,110 @@ def resolve_existing_incident(
         )
 
     return incident
+
+
+def queue_or_conflict(
+    db: Session,
+    *,
+    action: str,
+    slot: str | None = None,
+    version: str | None = None,
+    git_sha: str | None = None,
+):
+    operation = queue_operation(
+        db,
+        action=action,
+        slot=slot,
+        version=version,
+        git_sha=git_sha,
+    )
+
+    if operation is None:
+        raise HTTPException(
+            status_code=409,
+            detail=("Another deployment operation is already active"),
+        )
+
+    return operation
+
+
+@app.post(
+    "/api/operations/deploy-healthy",
+    response_model=DeploymentOperationRead,
+    status_code=202,
+)
+def deploy_healthy(
+    payload: DeploymentOperationRequest,
+    db: DatabaseSession,
+):
+    return queue_or_conflict(
+        db,
+        action="deploy_healthy",
+        slot=payload.slot,
+        version=payload.version,
+        git_sha=payload.git_sha,
+    )
+
+
+@app.post(
+    "/api/operations/deploy-broken",
+    response_model=DeploymentOperationRead,
+    status_code=202,
+)
+def deploy_broken(
+    payload: DeploymentOperationRequest,
+    db: DatabaseSession,
+):
+    return queue_or_conflict(
+        db,
+        action="deploy_broken",
+        slot=payload.slot,
+        version=payload.version,
+        git_sha=payload.git_sha,
+    )
+
+
+@app.post(
+    "/api/operations/rollback",
+    response_model=DeploymentOperationRead,
+    status_code=202,
+)
+def rollback(
+    db: DatabaseSession,
+):
+    return queue_or_conflict(
+        db,
+        action="rollback",
+    )
+
+
+@app.get(
+    "/api/operations",
+    response_model=list[DeploymentOperationRead],
+)
+def operations(
+    db: DatabaseSession,
+):
+    return list_operations(db)
+
+
+@app.get(
+    "/api/operations/{operation_id}",
+    response_model=DeploymentOperationRead,
+)
+def operation(
+    operation_id: int,
+    db: DatabaseSession,
+):
+    result = get_operation(
+        db,
+        operation_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Operation not found",
+        )
+
+    return result

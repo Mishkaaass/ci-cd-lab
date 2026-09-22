@@ -49,19 +49,41 @@ class DeploymentOperation(Base):
     __tablename__ = "deployment_operations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    action: Mapped[str] = mapped_column(String(32))
+
+    action: Mapped[str] = mapped_column(
+        String(32),
+    )
+
     status: Mapped[str] = mapped_column(
         String(32),
         default="queued",
     )
+
+    slot: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+    )
+
+    version: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    git_sha: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
     )
+
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
+
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -77,14 +99,22 @@ class DeploymentOperation(Base):
 class OperationStep(Base):
     __tablename__ = "operation_steps"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+    )
 
     operation_id: Mapped[int] = mapped_column(
         ForeignKey("deployment_operations.id"),
     )
 
-    position: Mapped[int] = mapped_column(Integer)
-    name: Mapped[str] = mapped_column(String(100))
+    position: Mapped[int] = mapped_column(
+        Integer,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(100),
+    )
+
     status: Mapped[str] = mapped_column(
         String(32),
         default="pending",
