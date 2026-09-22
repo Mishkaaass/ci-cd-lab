@@ -1,8 +1,15 @@
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+)
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,6 +28,7 @@ from opsboard.incidents import (
     resolve_incident,
 )
 from opsboard.monitor import fetch_demo_service_status
+from opsboard.operation_executor import dispatch_operation
 from opsboard.operations import (
     get_operation,
     list_operations,
@@ -38,6 +46,18 @@ from opsboard.schemas import (
 DatabaseSession = Annotated[
     Session,
     Depends(get_db),
+]
+
+OperationDispatcher = Callable[[int], None]
+
+
+def get_operation_dispatcher() -> OperationDispatcher:
+    return dispatch_operation
+
+
+OperationDispatcherDependency = Annotated[
+    OperationDispatcher,
+    Depends(get_operation_dispatcher),
 ]
 
 
@@ -255,6 +275,17 @@ def queue_or_conflict(
     return operation
 
 
+def schedule_operation(
+    background_tasks: BackgroundTasks,
+    dispatcher: OperationDispatcher,
+    operation_id: int,
+) -> None:
+    background_tasks.add_task(
+        dispatcher,
+        operation_id,
+    )
+
+
 @app.post(
     "/api/operations/deploy-healthy",
     response_model=DeploymentOperationRead,
@@ -262,15 +293,25 @@ def queue_or_conflict(
 )
 def deploy_healthy(
     payload: DeploymentOperationRequest,
+    background_tasks: BackgroundTasks,
     db: DatabaseSession,
+    dispatcher: OperationDispatcherDependency,
 ):
-    return queue_or_conflict(
+    operation = queue_or_conflict(
         db,
         action="deploy_healthy",
         slot=payload.slot,
         version=payload.version,
         git_sha=payload.git_sha,
     )
+
+    schedule_operation(
+        background_tasks,
+        dispatcher,
+        operation.id,
+    )
+
+    return operation
 
 
 @app.post(
@@ -280,15 +321,25 @@ def deploy_healthy(
 )
 def deploy_broken(
     payload: DeploymentOperationRequest,
+    background_tasks: BackgroundTasks,
     db: DatabaseSession,
+    dispatcher: OperationDispatcherDependency,
 ):
-    return queue_or_conflict(
+    operation = queue_or_conflict(
         db,
         action="deploy_broken",
         slot=payload.slot,
         version=payload.version,
         git_sha=payload.git_sha,
     )
+
+    schedule_operation(
+        background_tasks,
+        dispatcher,
+        operation.id,
+    )
+
+    return operation
 
 
 @app.post(
@@ -297,12 +348,22 @@ def deploy_broken(
     status_code=202,
 )
 def rollback(
+    background_tasks: BackgroundTasks,
     db: DatabaseSession,
+    dispatcher: OperationDispatcherDependency,
 ):
-    return queue_or_conflict(
+    operation = queue_or_conflict(
         db,
         action="rollback",
     )
+
+    schedule_operation(
+        background_tasks,
+        dispatcher,
+        operation.id,
+    )
+
+    return operation
 
 
 @app.get(
