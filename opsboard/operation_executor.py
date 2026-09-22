@@ -1,14 +1,23 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from threading import Thread
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from opsboard.database import SessionLocal
-from opsboard.deployment_runner import run_deployment_action
+from opsboard.deployment_runner import (
+    DEFAULT_DEPLOYMENT_TIMEOUT_SECONDS,
+    run_deployment_action,
+)
 from opsboard.operations import get_operation
 
 Runner = Callable[..., object]
+
+DEFAULT_OPERATION_RUNNER = partial(
+    run_deployment_action,
+    timeout_seconds=(DEFAULT_DEPLOYMENT_TIMEOUT_SECONDS),
+)
 
 
 def utc_now():
@@ -19,7 +28,7 @@ def execute_operation(
     db: Session,
     operation_id: int,
     *,
-    runner: Runner = run_deployment_action,
+    runner: Runner = DEFAULT_OPERATION_RUNNER,
 ) -> None:
     operation = get_operation(
         db,
