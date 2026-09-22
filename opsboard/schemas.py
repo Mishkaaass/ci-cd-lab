@@ -67,10 +67,9 @@ class IncidentRead(BaseModel):
 
 
 class DeploymentOperationRequest(BaseModel):
-    slot: Literal[
-        "blue",
-        "green",
-    ]
+    model_config = ConfigDict(
+        extra="forbid",
+    )
 
     version: str = Field(
         min_length=1,

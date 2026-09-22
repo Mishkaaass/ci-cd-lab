@@ -3,11 +3,6 @@ const ACTIVE_STATUSES = new Set([
     "running",
 ]);
 
-const terminalStatuses = new Set([
-    "success",
-    "failed",
-]);
-
 
 function byId(id) {
     return document.getElementById(id);
@@ -65,8 +60,13 @@ function normalizeValue(value) {
 
 
 function updateSlotDisplay(operation) {
-    const blueState = byId("blue-slot-state");
-    const greenState = byId("green-slot-state");
+    const blueState = byId(
+        "blue-slot-state",
+    );
+
+    const greenState = byId(
+        "green-slot-state",
+    );
 
     if (!blueState || !greenState) {
         return;
@@ -76,46 +76,69 @@ function updateSlotDisplay(operation) {
     greenState.textContent = "—";
 
     if (operation?.slot === "blue") {
-        blueState.textContent = "Latest target";
+        blueState.textContent =
+            "Latest target";
     }
 
     if (operation?.slot === "green") {
-        greenState.textContent = "Latest target";
+        greenState.textContent =
+            "Latest target";
     }
 }
 
 
 function createTimelineStep(step) {
-    const wrapper = document.createElement("div");
+    const wrapper =
+        document.createElement("div");
 
     wrapper.className =
         `timeline-step timeline-${step.status}`;
 
-    const marker = document.createElement("div");
-    marker.className = "timeline-marker";
+    const marker =
+        document.createElement("div");
 
-    const content = document.createElement("div");
+    marker.className =
+        "timeline-marker";
 
-    const title = document.createElement("strong");
+    const content =
+        document.createElement("div");
+
+    const title =
+        document.createElement("strong");
+
     title.textContent = step.name;
 
-    const status = document.createElement("span");
+    const status =
+        document.createElement("span");
+
     status.textContent =
-        step.status.charAt(0).toUpperCase() +
-        step.status.slice(1);
+        step.status.charAt(0).toUpperCase()
+        + step.status.slice(1);
 
-    content.appendChild(title);
-    content.appendChild(status);
+    content.appendChild(
+        title,
+    );
 
-    wrapper.appendChild(marker);
-    wrapper.appendChild(content);
+    content.appendChild(
+        status,
+    );
+
+    wrapper.appendChild(
+        marker,
+    );
+
+    wrapper.appendChild(
+        content,
+    );
 
     return wrapper;
 }
 
 
 function renderTimeline(operation) {
-    const timeline = byId("operation-timeline");
+    const timeline = byId(
+        "operation-timeline",
+    );
 
     if (!timeline) {
         return;
@@ -124,20 +147,26 @@ function renderTimeline(operation) {
     timeline.replaceChildren();
 
     if (!operation?.steps?.length) {
-        const empty = document.createElement("p");
+        const empty =
+            document.createElement("p");
 
         empty.className = "empty";
+
         empty.textContent =
             "No deployment operation recorded yet.";
 
-        timeline.appendChild(empty);
+        timeline.appendChild(
+            empty,
+        );
 
         return;
     }
 
     for (const step of operation.steps) {
         timeline.appendChild(
-            createTimelineStep(step),
+            createTimelineStep(
+                step,
+            ),
         );
     }
 }
@@ -160,12 +189,16 @@ function renderOperation(operation) {
 
     setText(
         "operation-version",
-        normalizeValue(operation.version),
+        normalizeValue(
+            operation.version,
+        ),
     );
 
     setText(
         "operation-git-sha",
-        normalizeValue(operation.git_sha),
+        normalizeValue(
+            operation.git_sha,
+        ),
     );
 
     setText(
@@ -173,14 +206,21 @@ function renderOperation(operation) {
         operation.status.toUpperCase(),
     );
 
-    updateSlotDisplay(operation);
-    renderTimeline(operation);
+    updateSlotDisplay(
+        operation,
+    );
+
+    renderTimeline(
+        operation,
+    );
 
     const isActive = ACTIVE_STATUSES.has(
         operation.status,
     );
 
-    setControlsDisabled(isActive);
+    setControlsDisabled(
+        isActive,
+    );
 
     if (operation.status === "queued") {
         setFeedback(
@@ -212,7 +252,9 @@ function renderOperation(operation) {
 }
 
 
-function renderOperationHistory(operations) {
+function renderOperationHistory(
+    operations,
+) {
     const container = byId(
         "operation-history",
     );
@@ -224,57 +266,91 @@ function renderOperationHistory(operations) {
     container.replaceChildren();
 
     if (!operations.length) {
-        const empty = document.createElement("p");
+        const empty =
+            document.createElement("p");
 
         empty.className = "empty";
+
         empty.textContent =
             "No operations recorded.";
 
-        container.appendChild(empty);
+        container.appendChild(
+            empty,
+        );
 
         return;
     }
 
-    for (const operation of operations.slice(0, 10)) {
-        const row = document.createElement("div");
+    for (
+        const operation
+        of operations.slice(0, 10)
+    ) {
+        const row =
+            document.createElement("div");
 
         row.className =
             "operation-history-row";
 
-        const left = document.createElement("div");
+        const left =
+            document.createElement("div");
 
-        const title = document.createElement("strong");
+        const title =
+            document.createElement("strong");
 
         title.textContent =
             `#${operation.id} ${operation.action}`;
 
-        const release = document.createElement("p");
+        const release =
+            document.createElement("p");
 
         release.textContent =
             operation.version || "rollback";
 
-        left.appendChild(title);
-        left.appendChild(release);
+        left.appendChild(
+            title,
+        );
 
-        const status = document.createElement("span");
+        left.appendChild(
+            release,
+        );
+
+        const status =
+            document.createElement("span");
 
         status.textContent =
             operation.status.toUpperCase();
 
-        row.appendChild(left);
-        row.appendChild(status);
+        row.appendChild(
+            left,
+        );
 
-        container.appendChild(row);
+        row.appendChild(
+            status,
+        );
+
+        container.appendChild(
+            row,
+        );
     }
 }
 
 
 async function parseError(response) {
     try {
-        const payload = await response.json();
+        const payload =
+            await response.json();
 
         if (payload.detail) {
-            return payload.detail;
+            if (
+                typeof payload.detail
+                === "string"
+            ) {
+                return payload.detail;
+            }
+
+            return JSON.stringify(
+                payload.detail,
+            );
         }
     } catch {
         return `HTTP ${response.status}`;
@@ -285,21 +361,23 @@ async function parseError(response) {
 
 
 function deploymentPayload() {
-    const slot = byId("deployment-slot")?.value;
     const version =
-        byId("deployment-version")?.value.trim();
+        byId(
+            "deployment-version",
+        )?.value.trim();
 
     const gitSha =
-        byId("deployment-git-sha")?.value.trim();
+        byId(
+            "deployment-git-sha",
+        )?.value.trim();
 
-    if (!slot || !version || !gitSha) {
+    if (!version || !gitSha) {
         throw new Error(
-            "Target slot, version and Git SHA are required.",
+            "Version and Git SHA are required.",
         );
     }
 
     return {
-        slot,
         version,
         git_sha: gitSha,
     };
@@ -308,20 +386,24 @@ function deploymentPayload() {
 
 async function submitOperation(action) {
     let endpoint;
-    let options = {
+
+    const options = {
         method: "POST",
         headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+                "application/json",
         },
     };
 
     if (action === "rollback") {
-        endpoint = "/api/operations/rollback";
+        endpoint =
+            "/api/operations/rollback";
     } else {
         let payload;
 
         try {
-            payload = deploymentPayload();
+            payload =
+                deploymentPayload();
         } catch (error) {
             setFeedback(
                 error.message,
@@ -337,10 +419,15 @@ async function submitOperation(action) {
                 : "/api/operations/deploy-broken"
         );
 
-        options.body = JSON.stringify(payload);
+        options.body =
+            JSON.stringify(
+                payload,
+            );
     }
 
-    setControlsDisabled(true);
+    setControlsDisabled(
+        true,
+    );
 
     setFeedback(
         "Submitting approved operation...",
@@ -355,18 +442,25 @@ async function submitOperation(action) {
 
         if (!response.ok) {
             throw new Error(
-                await parseError(response),
+                await parseError(
+                    response,
+                ),
             );
         }
 
-        const operation = await response.json();
+        const operation =
+            await response.json();
 
-        renderOperation(operation);
+        renderOperation(
+            operation,
+        );
 
         await refreshOperations();
 
     } catch (error) {
-        setControlsDisabled(false);
+        setControlsDisabled(
+            false,
+        );
 
         setFeedback(
             error.message,
@@ -389,14 +483,18 @@ async function refreshOperations() {
         const operations =
             await response.json();
 
-        renderOperationHistory(operations);
+        renderOperationHistory(
+            operations,
+        );
 
         if (operations.length > 0) {
             renderOperation(
                 operations[0],
             );
         } else {
-            setControlsDisabled(false);
+            setControlsDisabled(
+                false,
+            );
         }
 
     } catch {
@@ -430,22 +528,30 @@ function updateServiceStatus(service) {
 
     setText(
         "service-version",
-        normalizeValue(service.version),
+        normalizeValue(
+            service.version,
+        ),
     );
 
     setText(
         "service-git-sha",
-        normalizeValue(service.git_sha),
+        normalizeValue(
+            service.git_sha,
+        ),
     );
 
     setText(
         "production-version",
-        normalizeValue(service.version),
+        normalizeValue(
+            service.version,
+        ),
     );
 
     setText(
         "production-git-sha",
-        normalizeValue(service.git_sha),
+        normalizeValue(
+            service.git_sha,
+        ),
     );
 
     setText(
@@ -455,12 +561,15 @@ function updateServiceStatus(service) {
             : "Not Ready",
     );
 
-    const status = byId("service-status");
+    const status = byId(
+        "service-status",
+    );
 
     if (status) {
         status.textContent =
-            service.status.charAt(0).toUpperCase() +
-            service.status.slice(1);
+            service.status.charAt(0)
+            .toUpperCase()
+            + service.status.slice(1);
 
         status.className =
             `status status-${service.status}`;
@@ -478,9 +587,12 @@ async function refreshService() {
             return;
         }
 
-        const service = await response.json();
+        const service =
+            await response.json();
 
-        updateServiceStatus(service);
+        updateServiceStatus(
+            service,
+        );
 
     } catch {
         return;
@@ -489,29 +601,32 @@ async function refreshService() {
 
 
 function connectActions() {
-    byId("deploy-healthy-button")
-        ?.addEventListener(
-            "click",
-            () => submitOperation(
-                "deploy_healthy",
-            ),
-        );
+    byId(
+        "deploy-healthy-button",
+    )?.addEventListener(
+        "click",
+        () => submitOperation(
+            "deploy_healthy",
+        ),
+    );
 
-    byId("deploy-broken-button")
-        ?.addEventListener(
-            "click",
-            () => submitOperation(
-                "deploy_broken",
-            ),
-        );
+    byId(
+        "deploy-broken-button",
+    )?.addEventListener(
+        "click",
+        () => submitOperation(
+            "deploy_broken",
+        ),
+    );
 
-    byId("rollback-button")
-        ?.addEventListener(
-            "click",
-            () => submitOperation(
-                "rollback",
-            ),
-        );
+    byId(
+        "rollback-button",
+    )?.addEventListener(
+        "click",
+        () => submitOperation(
+            "rollback",
+        ),
+    );
 }
 
 

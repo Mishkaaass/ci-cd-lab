@@ -1,6 +1,8 @@
 import os
+import re
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
@@ -50,6 +52,13 @@ DatabaseSession = Annotated[
 
 OperationDispatcher = Callable[[int], None]
 
+NGINX_ACTIVE_BACKEND_CONFIG = Path("nginx/active_backend.inc")
+
+ACTIVE_BACKEND_PATTERN = re.compile(
+    r"^\s*server demo-(blue|green):8000;\s*$",
+    re.MULTILINE,
+)
+
 
 def get_operation_dispatcher() -> OperationDispatcher:
     return dispatch_operation
@@ -61,9 +70,47 @@ OperationDispatcherDependency = Annotated[
 ]
 
 
+def resolve_inactive_slot(
+    config_path: str | Path = NGINX_ACTIVE_BACKEND_CONFIG,
+) -> str:
+    content = Path(
+        config_path,
+    ).read_text()
+
+    matches = ACTIVE_BACKEND_PATTERN.findall(
+        content,
+    )
+
+    if len(matches) != 1:
+        raise ValueError("Unable to determine active production slot")
+
+    active_slot = matches[0]
+
+    if active_slot == "blue":
+        return "green"
+
+    return "blue"
+
+
+def deployment_target_slot() -> str:
+    try:
+        return resolve_inactive_slot()
+    except (
+        OSError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=("Unable to determine active production slot"),
+        ) from exc
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(
+        bind=engine,
+    )
+
     yield
 
 
@@ -75,7 +122,9 @@ app = FastAPI(
 
 app.mount(
     "/static",
-    StaticFiles(directory="static"),
+    StaticFiles(
+        directory="static",
+    ),
     name="static",
 )
 
@@ -102,9 +151,17 @@ def dashboard(
 ):
     service = fetch_demo_service_status()
 
-    deployments = list_deployments(db)[:10]
-    incidents = list_incidents(db)[:10]
-    operations = list_operations(db)[:10]
+    deployments = list_deployments(
+        db,
+    )[:10]
+
+    incidents = list_incidents(
+        db,
+    )[:10]
+
+    operations = list_operations(
+        db,
+    )[:10]
 
     active_incidents = [
         incident for incident in incidents if incident.status == "active"
@@ -124,11 +181,11 @@ def dashboard(
             ),
             "service": service,
             "deployments": deployments,
-            "latest_deployment": latest_deployment,
+            "latest_deployment": (latest_deployment),
             "incidents": incidents,
-            "active_incidents": active_incidents,
+            "active_incidents": (active_incidents),
             "operations": operations,
-            "latest_operation": latest_operation,
+            "latest_operation": (latest_operation),
         },
     )
 
@@ -205,7 +262,9 @@ def add_deployment(
 def deployments(
     db: DatabaseSession,
 ):
-    return list_deployments(db)
+    return list_deployments(
+        db,
+    )
 
 
 @app.post(
@@ -230,7 +289,9 @@ def add_incident(
 def incidents(
     db: DatabaseSession,
 ):
-    return list_incidents(db)
+    return list_incidents(
+        db,
+    )
 
 
 @app.post(
@@ -302,10 +363,12 @@ def deploy_healthy(
     db: DatabaseSession,
     dispatcher: OperationDispatcherDependency,
 ):
+    slot = deployment_target_slot()
+
     operation = queue_or_conflict(
         db,
         action="deploy_healthy",
-        slot=payload.slot,
+        slot=slot,
         version=payload.version,
         git_sha=payload.git_sha,
     )
@@ -330,10 +393,12 @@ def deploy_broken(
     db: DatabaseSession,
     dispatcher: OperationDispatcherDependency,
 ):
+    slot = deployment_target_slot()
+
     operation = queue_or_conflict(
         db,
         action="deploy_broken",
-        slot=payload.slot,
+        slot=slot,
         version=payload.version,
         git_sha=payload.git_sha,
     )
@@ -378,7 +443,9 @@ def rollback(
 def operations(
     db: DatabaseSession,
 ):
-    return list_operations(db)
+    return list_operations(
+        db,
+    )
 
 
 @app.get(
@@ -397,7 +464,7 @@ def operation(
     if result is None:
         raise HTTPException(
             status_code=404,
-            detail="Operation not found",
+            detail=("Operation not found"),
         )
 
     return result

@@ -243,29 +243,25 @@
 
             <p class="control-description">
                 Submit a constrained deployment operation.
-                The browser never sends shell commands.
+                OpsBoard automatically selects the inactive
+                Blue/Green slot. The browser never sends
+                shell commands or production routing decisions.
             </p>
 
 
             <div class="deployment-form">
 
-                <label class="form-field">
+                <div class="form-field">
 
                     <span>
                         TARGET SLOT
                     </span>
 
-                    <select id="deployment-slot">
-                        <option value="green">
-                            GREEN
-                        </option>
+                    <strong>
+                        Automatic inactive slot
+                    </strong>
 
-                        <option value="blue">
-                            BLUE
-                        </option>
-                    </select>
-
-                </label>
+                </div>
 
 
                 <label class="form-field">
@@ -412,7 +408,7 @@
 
 
             <p class="slot-note">
-                Slot state reflects the latest deployment target.
+                OpsBoard selects the inactive slot automatically.
                 Active production identity is taken from the routed
                 service above.
             </p>

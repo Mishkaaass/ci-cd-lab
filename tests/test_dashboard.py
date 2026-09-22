@@ -14,7 +14,9 @@ from opsboard.operations import create_operation
 def client():
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
+        connect_args={
+            "check_same_thread": False,
+        },
         poolclass=StaticPool,
     )
 
@@ -23,7 +25,9 @@ def client():
         expire_on_commit=False,
     )
 
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(
+        bind=engine,
+    )
 
     def override_get_db():
         db = testing_session()
@@ -36,10 +40,19 @@ def client():
     app_module.app.dependency_overrides[get_db] = override_get_db
 
     try:
-        yield TestClient(app_module.app), testing_session
+        yield (
+            TestClient(
+                app_module.app,
+            ),
+            testing_session,
+        )
     finally:
         app_module.app.dependency_overrides.clear()
-        Base.metadata.drop_all(bind=engine)
+
+        Base.metadata.drop_all(
+            bind=engine,
+        )
+
         engine.dispose()
 
 
@@ -64,7 +77,7 @@ def test_dashboard_renders_operational_data(
             Incident(
                 service="demo-api",
                 severity="critical",
-                reason="High latency detected",
+                reason=("High latency detected"),
                 status="active",
             )
         )
@@ -117,7 +130,12 @@ def test_dashboard_renders_operational_data(
     assert "Deploy Broken" in html
     assert "Rollback" in html
 
+    assert "Automatic inactive slot" in html
+
+    assert 'id="deployment-slot"' not in html
+
     assert "Live Deployment Timeline" in html
+
     assert "Candidate selected" in html
     assert "Container started" in html
     assert "Readiness check" in html

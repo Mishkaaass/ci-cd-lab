@@ -4,10 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app import (
-    app,
-    get_operation_dispatcher,
-)
+import app as app_module
 from opsboard.database import Base, get_db
 
 
@@ -17,10 +14,15 @@ def dispatch_calls():
 
 
 @pytest.fixture
-def client(dispatch_calls):
+def client(
+    dispatch_calls,
+    monkeypatch,
+):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
+        connect_args={
+            "check_same_thread": False,
+        },
         poolclass=StaticPool,
     )
 
@@ -29,7 +31,9 @@ def client(dispatch_calls):
         expire_on_commit=False,
     )
 
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(
+        bind=engine,
+    )
 
     def override_get_db():
         db = testing_session()
@@ -40,29 +44,73 @@ def client(dispatch_calls):
             db.close()
 
     def fake_dispatcher(operation_id):
-        dispatch_calls.append(operation_id)
+        dispatch_calls.append(
+            operation_id,
+        )
 
     def override_dispatcher():
         return fake_dispatcher
 
-    app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_operation_dispatcher] = override_dispatcher
+    app_module.app.dependency_overrides[get_db] = override_get_db
+
+    app_module.app.dependency_overrides[app_module.get_operation_dispatcher] = (
+        override_dispatcher
+    )
+
+    monkeypatch.setattr(
+        app_module,
+        "resolve_inactive_slot",
+        lambda *args, **kwargs: "green",
+        raising=False,
+    )
 
     try:
-        yield TestClient(app)
+        yield TestClient(
+            app_module.app,
+        )
     finally:
-        app.dependency_overrides.clear()
-        Base.metadata.drop_all(bind=engine)
+        app_module.app.dependency_overrides.clear()
+        Base.metadata.drop_all(
+            bind=engine,
+        )
         engine.dispose()
 
 
-def test_queue_healthy_deployment(
+def test_resolve_inactive_slot_from_nginx_config(
+    tmp_path,
+):
+    assert hasattr(
+        app_module,
+        "resolve_inactive_slot",
+    ), "resolve_inactive_slot is missing"
+
+    config_path = tmp_path / "active_backend.inc"
+
+    config_path.write_text("server demo-blue:8000;\n")
+
+    assert (
+        app_module.resolve_inactive_slot(
+            config_path,
+        )
+        == "green"
+    )
+
+    config_path.write_text("server demo-green:8000;\n")
+
+    assert (
+        app_module.resolve_inactive_slot(
+            config_path,
+        )
+        == "blue"
+    )
+
+
+def test_queue_healthy_deployment_uses_inactive_slot(
     client,
 ):
     response = client.post(
         "/api/operations/deploy-healthy",
         json={
-            "slot": "green",
             "version": "v2.1.0",
             "git_sha": "abc123",
         },
@@ -74,7 +122,9 @@ def test_queue_healthy_deployment(
 
     assert operation["action"] == "deploy_healthy"
     assert operation["status"] == "queued"
+
     assert operation["slot"] == "green"
+
     assert operation["version"] == "v2.1.0"
     assert operation["git_sha"] == "abc123"
 
@@ -91,6 +141,44 @@ def test_queue_healthy_deployment(
     assert all(step["status"] == "pending" for step in operation["steps"])
 
 
+def test_backend_can_select_blue_when_green_is_active(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        app_module,
+        "resolve_inactive_slot",
+        lambda *args, **kwargs: "blue",
+    )
+
+    response = client.post(
+        "/api/operations/deploy-healthy",
+        json={
+            "version": "v2.2.0",
+            "git_sha": "release220",
+        },
+    )
+
+    assert response.status_code == 202
+
+    assert response.json()["slot"] == "blue"
+
+
+def test_browser_cannot_choose_deployment_slot(
+    client,
+):
+    response = client.post(
+        "/api/operations/deploy-healthy",
+        json={
+            "slot": "blue",
+            "version": "v2.1.0",
+            "git_sha": "abc123",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_healthy_deployment_is_dispatched(
     client,
     dispatch_calls,
@@ -98,7 +186,6 @@ def test_healthy_deployment_is_dispatched(
     response = client.post(
         "/api/operations/deploy-healthy",
         json={
-            "slot": "green",
             "version": "v2.2.0",
             "git_sha": "release220",
         },
@@ -119,7 +206,6 @@ def test_second_active_operation_is_rejected(
     first = client.post(
         "/api/operations/deploy-healthy",
         json={
-            "slot": "green",
             "version": "v2.1.0",
             "git_sha": "abc123",
         },
@@ -130,7 +216,6 @@ def test_second_active_operation_is_rejected(
     second = client.post(
         "/api/operations/deploy-broken",
         json={
-            "slot": "blue",
             "version": "v2.1.1",
             "git_sha": "def456",
         },
@@ -147,7 +232,6 @@ def test_operation_can_be_read_by_id(
     created = client.post(
         "/api/operations/deploy-healthy",
         json={
-            "slot": "green",
             "version": "v2.1.0",
             "git_sha": "abc123",
         },
@@ -160,7 +244,9 @@ def test_operation_can_be_read_by_id(
     )
 
     assert response.status_code == 200
+
     assert response.json()["id"] == operation_id
+
     assert response.json()["version"] == "v2.1.0"
 
 
@@ -170,7 +256,6 @@ def test_operations_can_be_listed(
     created = client.post(
         "/api/operations/deploy-healthy",
         json={
-            "slot": "green",
             "version": "v2.1.0",
             "git_sha": "abc123",
         },
