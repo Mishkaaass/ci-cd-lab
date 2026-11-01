@@ -57,17 +57,15 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
 
-      - name: Scan candidate image by digest
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
           version: v0.76.1
-          scan-type: image
-          image-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
-          scanners: vuln
-          format: table
-          exit-code: '1'
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
+
+      - name: Check container security policy
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+        run: sh scripts/scan-image.sh "$IMAGE"
 
       - name: Create smoke test network
         run: docker network create opsboard-smoke

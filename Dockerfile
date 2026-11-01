@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM python:3.14-slim
 
 WORKDIR /app
@@ -5,19 +6,19 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update \
     && apt-get install -y --no-install-recommends --only-upgrade \
        gzip \
        libpcre2-8-0 \
        libsqlite3-0 \
-       perl-base \
-    && rm -rf /var/lib/apt/lists/*
+       perl-base
 
 COPY requirements.txt .
 
-RUN python -m pip install \
-    --no-cache-dir \
-    -r requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip check \
+    && python -m pip uninstall --yes pip
 
 COPY app.py .
 COPY opsboard ./opsboard
