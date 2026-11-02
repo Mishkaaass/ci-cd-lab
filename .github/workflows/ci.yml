@@ -123,13 +123,12 @@ jobs:
       - name: Build Docker image
         run: docker build -t ci-cd-lab:ci .
 
-      - name: Scan Docker image for vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
-          image-ref: ci-cd-lab:ci
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os
-          scanners: vuln
-          severity: CRITICAL,HIGH
+          version: v0.76.1
+
+      - name: Check container security policy
+        env:
+          IMAGE: ci-cd-lab:ci
+        run: sh scripts/scan-image.sh "$IMAGE"
