@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: opsboard
 resources:
   - postgres.yaml
+  - app.yaml
