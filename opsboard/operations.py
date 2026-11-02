@@ -172,6 +172,9 @@ def get_operation(
 
 def list_operations(
     db: Session,
+    *,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[DeploymentOperation]:
     statement = (
         select(DeploymentOperation)
@@ -183,6 +186,8 @@ def list_operations(
         .order_by(
             DeploymentOperation.id.desc(),
         )
+        .limit(limit)
+        .offset(offset)
     )
 
     return list(db.scalars(statement).all())

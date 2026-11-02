@@ -10,3 +10,7 @@ select = [
     "B",
     "UP",
 ]
+
+# Standalone host tools also run with the system Python.
+[tool.ruff.per-file-target-version]
+"scripts/*.py" = "py312"

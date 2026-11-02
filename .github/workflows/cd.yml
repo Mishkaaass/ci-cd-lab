@@ -17,13 +17,17 @@ concurrency:
 jobs:
   publish:
     name: Publish Docker image
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Download tested commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -34,18 +38,18 @@ jobs:
           echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.1.0
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Build and publish candidate image
         id: build
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           push: true
@@ -67,110 +71,20 @@ jobs:
           IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
         run: sh scripts/scan-image.sh "$IMAGE"
 
-      - name: Create smoke test network
-        run: docker network create opsboard-smoke
-
-      - name: Start smoke test database
-        run: |
-          docker run -d \
-            --name opsboard-smoke-db \
-            --network opsboard-smoke \
-            -e POSTGRES_DB=opsboard \
-            -e POSTGRES_USER=opsboard \
-            -e POSTGRES_PASSWORD=opsboard_smoke_password \
-            postgres:18-alpine
-
-          for attempt in {1..20}; do
-            if docker exec opsboard-smoke-db \
-              pg_isready \
-              -U opsboard \
-              -d opsboard
-            then
-              echo "PostgreSQL is ready"
-              exit 0
-            fi
-
-            sleep 1
-          done
-
-          docker logs opsboard-smoke-db
-          exit 1
-
-      - name: Verify published image
+      - name: Verify authenticated published image and run isolated API attacks
         env:
           IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           GIT_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          docker pull "$IMAGE"
+        run: python3 scripts/test-release-security.py "$IMAGE" "$GIT_SHA"
 
-          docker run -d \
-            --name ci-cd-lab-smoke \
-            --network opsboard-smoke \
-            -p 8000:8000 \
-            -e APP_ENV=ci \
-            -e APP_VERSION="sha-${GIT_SHA:0:7}" \
-            -e GIT_SHA="$GIT_SHA" \
-            -e DATABASE_URL="postgresql+psycopg://opsboard:opsboard_smoke_password@opsboard-smoke-db:5432/opsboard" \
-            "$IMAGE"
-
-          for attempt in {1..20}; do
-            HEALTH_OK=false
-            READY_OK=false
-
-            if curl \
-              --fail \
-              --silent \
-              http://127.0.0.1:8000/health \
-              | grep -q '"status":"ok"'
-            then
-              HEALTH_OK=true
-            fi
-
-            if curl \
-              --fail \
-              --silent \
-              http://127.0.0.1:8000/ready \
-              | grep -q '"status":"ready"'
-            then
-              READY_OK=true
-            fi
-
-            if [[ "$HEALTH_OK" == "true" && "$READY_OK" == "true" ]]; then
-              echo "Health and readiness checks passed"
-              break
-            fi
-
-            if [[ "$attempt" == "20" ]]; then
-              echo "Smoke test failed"
-              docker logs ci-cd-lab-smoke
-              exit 1
-            fi
-
-            sleep 1
-          done
-
-          VERSION_JSON=$(
-            curl \
-              --fail \
-              --silent \
-              http://127.0.0.1:8000/version
-          )
-
-          echo "Published release:"
-          echo "$VERSION_JSON"
-
-          ACTUAL_SHA=$(
-            echo "$VERSION_JSON" \
-              | python3 -c \
-              'import json,sys; print(json.load(sys.stdin)["git_sha"])'
-          )
-
-          if [[ "$ACTUAL_SHA" != "$GIT_SHA" ]]; then
-            echo "Published image Git SHA does not match tested commit"
-            exit 1
-          fi
-
-          echo "Published image verified successfully"
+      - name: Save sanitized release security report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-release-${{ github.run_attempt }}
+          path: artifacts/security/zap-report.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Promote verified image to latest
         env:
@@ -189,9 +103,10 @@ jobs:
           printf 'Git commit: `%s`\n\nVerified image: `%s`\n' \
             "$GIT_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Cleanup smoke test
-        if: always()
-        run: |
-          docker rm -f ci-cd-lab-smoke || true
-          docker rm -f opsboard-smoke-db || true
-          docker network rm opsboard-smoke || true
+          python3 - <<'PYRELEASE'
+          import json
+          import os
+          print("OPSBOARD_VERIFIED_RELEASE=" + json.dumps({
+              "image": os.environ["IMAGE"], "git_sha": os.environ["GIT_SHA"],
+          }, sort_keys=True))
+          PYRELEASE

@@ -13,7 +13,7 @@ def fetch_demo_service_status(base_url=None, client=None):
     owns_client = client is None
 
     if owns_client:
-        client = httpx.Client(timeout=3.0)
+        client = httpx.Client(timeout=3.0, trust_env=False, follow_redirects=False)
 
     try:
         health_response = client.get(f"{base_url}/health")

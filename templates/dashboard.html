@@ -45,6 +45,20 @@
 
     </header>
 
+    <section class="card auth-card">
+        <h2>Dashboard access</h2>
+        <p>Use your personal viewer or operator token. Refreshing or locking the page clears access.</p>
+        <form id="auth-form" class="deployment-form">
+            <label class="form-field">
+                <span>ACCESS TOKEN</span>
+                <input id="access-token" type="password" autocomplete="off" maxlength="256" required>
+            </label>
+            <button class="button" type="submit">Unlock</button>
+            <button id="lock-button" class="button button-secondary" type="button">Lock</button>
+        </form>
+        <p id="auth-status" aria-live="polite">Locked — operational data requires authentication.</p>
+    </section>
+
 
     <section class="overview-grid">
 
@@ -183,7 +197,7 @@
                 INCIDENT STATUS
             </p>
 
-            <div class="big-number">
+            <div id="active-incident-count" class="big-number">
                 {{ active_incidents | length }}
             </div>
 
@@ -191,6 +205,7 @@
                 Active incidents
             </p>
 
+            <div id="active-incident-summary">
             {% if active_incidents %}
 
                 <div class="incident-summary">
@@ -212,6 +227,7 @@
                 </p>
 
             {% endif %}
+            </div>
 
         </article>
 
@@ -304,6 +320,7 @@
 
                 <button
                     id="deploy-healthy-button"
+                    disabled
                     class="button button-primary"
                     type="button"
                 >
@@ -312,6 +329,7 @@
 
                 <button
                     id="deploy-broken-button"
+                    disabled
                     class="button button-danger"
                     type="button"
                 >
@@ -320,6 +338,7 @@
 
                 <button
                     id="rollback-button"
+                    disabled
                     class="button button-secondary"
                     type="button"
                 >
@@ -642,6 +661,7 @@
                     <span>Duration</span>
                 </div>
 
+                <div id="deployment-rows">
                 {% for deployment in deployments %}
 
                     <div class="table-row">
@@ -676,6 +696,8 @@
 
                 {% endfor %}
 
+                </div>
+
             </div>
 
         </article>
@@ -698,7 +720,7 @@
             </div>
 
 
-            <div class="incident-list">
+            <div id="incident-rows" class="incident-list">
 
                 {% for incident in incidents %}
 

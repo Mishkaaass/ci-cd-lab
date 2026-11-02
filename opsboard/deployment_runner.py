@@ -32,7 +32,7 @@ VALID_STEP_STATUSES = {
 
 STEP_EVENT_PREFIX = "OPSBOARD_STEP|"
 
-RELEASE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+RELEASE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 StepCallback = Callable[[str, str], None]
 

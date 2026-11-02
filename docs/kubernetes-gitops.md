@@ -43,3 +43,7 @@ Rollback uses a reviewed Git revert of the relevant deployment change.
 
 The existing dashboard deployment controls still target the Docker Compose demo;
 they do not control this Kubernetes deployment.
+
+Security-hardened releases additionally require an auth Secret and a verified
+image promotion; see [security-lab.md](security-lab.md). The existing pinned image
+is unchanged until that explicit promotion is reviewed and merged.

@@ -9,7 +9,7 @@ from opsboard.database import Base, get_db
 
 
 @pytest.fixture
-def client():
+def client(operator_headers):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -34,7 +34,7 @@ def client():
     app.dependency_overrides[get_db] = override_get_db
 
     try:
-        yield TestClient(app)
+        yield TestClient(app, headers=operator_headers)
     finally:
         app.dependency_overrides.pop(get_db, None)
         Base.metadata.drop_all(bind=engine)

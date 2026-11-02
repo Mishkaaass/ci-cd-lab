@@ -11,7 +11,7 @@ from opsboard.operations import create_operation
 
 
 @pytest.fixture
-def client():
+def client(viewer_headers):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={
@@ -43,6 +43,7 @@ def client():
         yield (
             TestClient(
                 app_module.app,
+                headers=viewer_headers,
             ),
             testing_session,
         )
@@ -119,11 +120,17 @@ def test_dashboard_renders_operational_data(
     html = response.text
 
     assert "OpsBoard" in html
-    assert "demo-api" in html
-    assert "Healthy" in html
-    assert "17.42 ms" in html
-    assert "v1.2.0" in html
-    assert "High latency detected" in html
+    assert "High latency detected" not in html
+    assert "v1.2.0" not in html
+    data_response = test_client.get("/api/dashboard")
+    assert data_response.status_code == 200
+    data = data_response.json()
+    assert data["service"]["name"] == "demo-api"
+    assert data["service"]["status"] == "healthy"
+    assert data["service"]["latency_ms"] == 17.42
+    assert data["deployments"][0]["version"] == "v1.2.0"
+    assert data["incidents"][0]["reason"] == "High latency detected"
+    assert data["active_incident_count"] == 1
 
     assert "Deployment Control" in html
     assert "Deploy Healthy" in html
@@ -136,11 +143,13 @@ def test_dashboard_renders_operational_data(
 
     assert "Live Deployment Timeline" in html
 
-    assert "Candidate selected" in html
-    assert "Container started" in html
-    assert "Readiness check" in html
-
-    assert "v2.0.0" in html
-    assert "release200" in html
+    operation = data["operations"][0]
+    assert [step["name"] for step in operation["steps"]] == [
+        "Candidate selected",
+        "Container started",
+        "Readiness check",
+    ]
+    assert operation["version"] == "v2.0.0"
+    assert operation["git_sha"] == "release200"
 
     assert "/static/dashboard.js" in html

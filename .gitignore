@@ -3,3 +3,8 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 .env
+
+# Credentials and local security reports
+*.token
+.opsboard-credentials/
+artifacts/
