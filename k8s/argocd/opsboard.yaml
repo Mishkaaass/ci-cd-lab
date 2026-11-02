@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: opsboard
+  namespace: argocd
+spec:
+  description: OpsBoard local Kubernetes lab
+  sourceRepos:
+    - https://github.com/Mishkaaass/ci-cd-lab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: opsboard
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opsboard
+  namespace: argocd
+spec:
+  project: opsboard
+  source:
+    repoURL: https://github.com/Mishkaaass/ci-cd-lab.git
+    targetRevision: main
+    path: k8s/opsboard
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opsboard
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - FailOnSharedResource=true
