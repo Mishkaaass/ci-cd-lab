@@ -1,5 +1,10 @@
 import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -88,3 +93,137 @@ def test_zap_coverage_accepts_origin_and_absolute_request_targets(
     hook.zap_pre_shutdown(zap)
     coverage = json.loads((tmp_path / "coverage.json").read_text())
     assert module().valid_coverage(coverage)
+
+
+@pytest.fixture
+def isolated_scan(tmp_path, monkeypatch):
+    """Model only Docker's file boundary; run controller and file IO unchanged.
+
+    Docker is external to pytest. A writable host bind models a ZAP-owned
+    private directory that an unprivileged runner cannot clean up. Read-only
+    inputs and `docker cp` leave host files owned by the runner instead.
+    """
+    scan = module()
+    state = SimpleNamespace(
+        writable_bind=False,
+        cleanup_error=False,
+        copy_error=False,
+        risk="1",
+        coverage_complete=True,
+        config=None,
+        mounts={},
+    )
+    real_temporary_directory = tempfile.TemporaryDirectory
+
+    class RunnerDirectory(real_temporary_directory):
+        def __exit__(self, *args):
+            super().__exit__(*args)
+            if state.writable_bind or state.cleanup_error:
+                raise PermissionError("fixture: foreign-owned ZAP directory")
+
+    def reports():
+        return {
+            "report.json": json.dumps(
+                {
+                    "site": [
+                        {
+                            "alerts": [{"riskcode": state.risk, "name": "fixture"}],
+                            "evidence": state.config["operator"],
+                        }
+                    ]
+                }
+            ),
+            "coverage.json": json.dumps(
+                {
+                    "authenticated_get": 1,
+                    "authenticated_post": 1,
+                    "quota_denials": 0,
+                    "auth_denials": 0,
+                    "active_scan_completed": state.coverage_complete,
+                }
+            ),
+        }
+
+    def docker_run(command, **kwargs):
+        assert command[0] == "docker"
+        args = command[1:]
+        output = ""
+        if args[0] == "pull":
+            pass
+        elif args[:2] == ["network", "create"]:
+            assert "--internal" in args
+            output = "fixture-network"
+        elif args[0] == "create":
+            if "--network-alias" in args:
+                output = args[args.index("--network-alias") + 1]
+            else:
+                output = "scanner"
+                for i, value in enumerate(args):
+                    if value == "--mount":
+                        fields = dict(
+                            part.split("=", 1) if "=" in part else (part, True)
+                            for part in args[i + 1].split(",")
+                        )
+                        state.mounts[fields["dst"]] = Path(fields["src"])
+                        if fields["type"] == "bind" and not fields.get("readonly"):
+                            state.writable_bind = True
+        elif args[:2] == ["start", "-a"]:
+            # Only a writable bind lets the scanner create files on the host.
+            if state.writable_bind:
+                for name, content in reports().items():
+                    (state.mounts["/zap/wrk"] / name).write_text(content)
+        elif args[0] == "start":
+            pass
+        elif args[0] == "exec":
+            if kwargs.get("input"):
+                state.config = json.loads(kwargs["input"])
+                output = json.dumps({"paths": {"/api/incidents": {}}})
+        elif args[0] == "cp":
+            if state.copy_error:
+                raise subprocess.CalledProcessError(1, command)
+            source = args[1].removeprefix("scanner:/zap/wrk/")
+            Path(args[2]).write_text(reports()[source])
+        elif args[:2] == ["rm", "-f"] or args[:2] == ["network", "rm"]:
+            pass
+        else:
+            raise AssertionError(f"Unexpected Docker operation: {args[:2]}")
+        return subprocess.CompletedProcess(command, 0, stdout=output, stderr="")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(scan.tempfile, "TemporaryDirectory", RunnerDirectory)
+    monkeypatch.setattr(scan.subprocess, "run", docker_run)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "fixture:image", "fixture-sha"])
+    return scan, state
+
+
+def test_scan_can_finish_without_cross_user_host_writes(isolated_scan, capsys):
+    scan, state = isolated_scan
+    assert scan.main() == 0
+    report = Path("artifacts/security/zap-report.json").read_text()
+    assert state.config["operator"] not in report
+    assert "[REDACTED]" in report
+    assert "PASS:" in capsys.readouterr().out
+
+
+def test_cleanup_failure_never_announces_a_successful_gate(isolated_scan, capsys):
+    scan, state = isolated_scan
+    state.cleanup_error = True
+    assert scan.main() == 1
+    output = capsys.readouterr()
+    assert "PASS:" not in output.out
+    assert "PermissionError" in output.err
+
+
+@pytest.mark.parametrize("failure", ["copy_error", "medium_alert", "incomplete_scan"])
+def test_scan_still_blocks_failed_or_unsafe_results(isolated_scan, capsys, failure):
+    scan, state = isolated_scan
+    if failure == "medium_alert":
+        state.risk = "2"
+    elif failure == "incomplete_scan":
+        state.coverage_complete = False
+    else:
+        state.copy_error = True
+    assert scan.main() == 1
+    output = capsys.readouterr()
+    assert "PASS:" not in output.out
+    assert "FAIL:" in output.err

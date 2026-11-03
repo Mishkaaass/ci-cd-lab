@@ -136,8 +136,7 @@ def main():
             # Hashes only. The non-root app needs read access to this CI-only bind file.
             auth.chmod(0o644)
             scan_dir = work / "zap"
-            scan_dir.mkdir(mode=0o777)
-            scan_dir.chmod(0o777)  # ZAP runs as its own unprivileged container user.
+            scan_dir.mkdir(mode=0o700)
             network_id = docker("network", "create", "--internal", network_name)
             db = create(
                 "--network",
@@ -217,29 +216,40 @@ def main():
                 "# Every protected mutation needs a Bearer header; no cookies.\n"
                 "10202\tIGNORE\tAnti-CSRF tokens do not apply to this bearer-only API\n"
             )
+            # Bind inputs individually, read-only, even under a private host umask.
+            # ZAP keeps all outputs in its own container filesystem.
+            input_mounts = []
+            for filename in ("api.json", "rules.conf", "coverage_hook.py"):
+                source = scan_dir / filename
+                source.chmod(0o644)
+                input_mounts.extend(
+                    ["--mount", f"type=bind,src={source},dst=/zap/{filename},readonly"]
+                )
             scanner = create(
                 "--network",
                 network_name,
                 "--cap-drop=ALL",
                 "--security-opt=no-new-privileges",
-                "--mount",
-                f"type=bind,src={scan_dir},dst=/zap/wrk",
+                *input_mounts,
                 "-e",
                 "ZAP_AUTH_HEADER_VALUE=Bearer " + operator,
                 "-e",
                 "ZAP_AUTH_HEADER_SITE=opsboard",
                 ZAP,
-                "zap-api-scan.py",
+                "sh",
+                "-c",
+                'mkdir -p /zap/wrk && exec zap-api-scan.py "$@"',
+                "zap-scan",
                 "-t",
-                "/zap/wrk/api.json",
+                "/zap/api.json",
                 "-f",
                 "openapi",
                 "-c",
-                "/zap/wrk/rules.conf",
+                "/zap/rules.conf",
                 "-J",
                 "report.json",
                 "--hook",
-                "/zap/wrk/coverage_hook.py",
+                "/zap/coverage_hook.py",
                 "-T",
                 "10",
                 "-z",
@@ -254,6 +264,11 @@ def main():
             )
             if result.returncode not in (0, 1, 2):
                 raise RuntimeError("ZAP scanner failed; no successful scan result")
+            # Copy only the two required files, without preserving container UIDs.
+            # A writable host bind can leave ZAP-owned directories that the
+            # unprivileged CI runner cannot remove during TemporaryDirectory cleanup.
+            for filename in ("report.json", "coverage.json"):
+                docker("cp", f"{scanner}:/zap/wrk/{filename}", str(scan_dir / filename))
             raw = (scan_dir / "report.json").read_text()
             for secret in (viewer, operator, password):
                 raw = raw.replace(secret, "[REDACTED]")
@@ -285,8 +300,6 @@ def main():
                 raise RuntimeError(
                     "ZAP MEDIUM/HIGH alerts: " + ", ".join(sorted(set(alerts)))
                 )
-            print("PASS: authenticated release smoke and isolated ZAP API scan")
-            print("Sanitized report: artifacts/security/zap-report.json")
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
         # Never print command arguments, request/response bodies, or CI credentials.
         print(
@@ -305,6 +318,8 @@ def main():
             subprocess.run(
                 ["docker", "network", "rm", network_id], capture_output=True, timeout=30
             )
+    print("PASS: authenticated release smoke and isolated ZAP API scan")
+    print("Sanitized report: artifacts/security/zap-report.json")
     return 0
 
 
