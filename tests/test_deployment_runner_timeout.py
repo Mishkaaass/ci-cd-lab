@@ -85,10 +85,12 @@ def test_runner_uses_own_process_group_without_new_session(
         f"""#!/usr/bin/env bash
 set -euo pipefail
 
-sid="$(ps -o sid= -p $$ | tr -d ' ')"
-pgid="$(ps -o pgid= -p $$ | tr -d ' ')"
-
-printf '%s %s\\n' "$sid" "$pgid" > "{process_file}"
+python3 - "{process_file}" <<'PYTHON'
+import os
+import sys
+with open(sys.argv[1], "w") as handle:
+    print(os.getsid(0), os.getpgrp(), file=handle)
+PYTHON
 """
     )
 

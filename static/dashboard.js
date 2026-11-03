@@ -1,3 +1,12 @@
+(() => {
+"use strict";
+let accessToken = "";
+let authEpoch = 0;
+let accessExpiresAt = 0;
+let expiryTimer;
+let canExecuteOperations = false;
+const responseEpochs = new WeakMap();
+
 const ACTIVE_STATUSES = new Set([
     "queued",
     "running",
@@ -41,7 +50,7 @@ function deploymentButtons() {
 
 function setControlsDisabled(disabled) {
     for (const button of deploymentButtons()) {
-        button.disabled = disabled;
+        button.disabled = disabled || !canExecuteOperations;
     }
 }
 
@@ -385,6 +394,10 @@ function deploymentPayload() {
 
 
 async function submitOperation(action) {
+    if (!accessToken || !canExecuteOperations) {
+        setFeedback("An authorized operator and enabled deployment backend are required.", "failed");
+        return;
+    }
     let endpoint;
 
     const options = {
@@ -435,7 +448,7 @@ async function submitOperation(action) {
     );
 
     try {
-        const response = await fetch(
+        const response = await authorizedFetch(
             endpoint,
             options,
         );
@@ -449,7 +462,7 @@ async function submitOperation(action) {
         }
 
         const operation =
-            await response.json();
+            await authorizedJSON(response);
 
         renderOperation(
             operation,
@@ -471,9 +484,10 @@ async function submitOperation(action) {
 
 
 async function refreshOperations() {
+    if (!accessToken) return;
     try {
-        const response = await fetch(
-            "/api/operations",
+        const response = await authorizedFetch(
+            "/api/operations?limit=10",
         );
 
         if (!response.ok) {
@@ -481,7 +495,7 @@ async function refreshOperations() {
         }
 
         const operations =
-            await response.json();
+            await authorizedJSON(response);
 
         renderOperationHistory(
             operations,
@@ -577,22 +591,20 @@ function updateServiceStatus(service) {
 }
 
 
-async function refreshService() {
+async function refreshDashboard() {
+    if (!accessToken) return;
     try {
-        const response = await fetch(
-            "/api/services/demo",
-        );
+        const response = await authorizedFetch("/api/dashboard");
 
         if (!response.ok) {
             return;
         }
 
-        const service =
-            await response.json();
-
-        updateServiceStatus(
-            service,
-        );
+        const data = await authorizedJSON(response);
+        updateServiceStatus(data.service);
+        renderRecords(data.deployments, data.incidents, data.active_incident_count);
+        renderOperationHistory(data.operations);
+        if (data.operations.length) renderOperation(data.operations[0]);
 
     } catch {
         return;
@@ -637,7 +649,7 @@ function startPolling() {
     );
 
     window.setInterval(
-        refreshService,
+        refreshDashboard,
         5000,
     );
 }
@@ -647,10 +659,176 @@ document.addEventListener(
     "DOMContentLoaded",
     () => {
         connectActions();
-
+        connectAuthentication();
+        setControlsDisabled(true);
         refreshOperations();
-        refreshService();
+        refreshDashboard();
 
         startPolling();
     },
 );
+
+
+async function authorizedFetch(url, options = {}) {
+    checkExpiry();
+    if (!accessToken) throw new Error("Unlock the dashboard first.");
+    const epoch = authEpoch;
+    const token = accessToken;
+    const response = await fetch(url, {
+        ...options,
+        credentials: "omit",
+        cache: "no-store",
+        headers: {...options.headers, Authorization: `Bearer ${token}`},
+    });
+    if (epoch !== authEpoch || token !== accessToken) {
+        throw new Error("Access changed while the request was pending.");
+    }
+    if (response.status === 401) {
+        lockDashboard("Access expired or was revoked. Unlock again.");
+        throw new Error("Authentication required.");
+    }
+    responseEpochs.set(response, epoch);
+    return response;
+}
+
+async function authorizedJSON(response) {
+    const payload = await response.json();
+    if (responseEpochs.get(response) !== authEpoch || !accessToken) {
+        throw new Error("Access changed while the response was pending.");
+    }
+    return payload;
+}
+
+function emptyMessage(container, message) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = message;
+    container.appendChild(p);
+}
+
+function renderRecords(deployments, incidents, activeCount) {
+    const rows = byId("deployment-rows");
+    const incidentRows = byId("incident-rows");
+    if (!rows || !incidentRows) return;
+    rows.replaceChildren();
+    incidentRows.replaceChildren();
+    for (const deployment of deployments) {
+        const row = document.createElement("div");
+        row.className = "table-row";
+        for (const value of [deployment.version, deployment.git_sha, deployment.status,
+            deployment.duration_ms === null ? "—" : `${deployment.duration_ms} ms`]) {
+            const cell = document.createElement("span");
+            cell.textContent = String(value);
+            row.appendChild(cell);
+        }
+        rows.appendChild(row);
+    }
+    if (!deployments.length) emptyMessage(rows, "No deployment history.");
+    for (const incident of incidents) {
+        const row = document.createElement("div");
+        row.className = "incident";
+        const detail = document.createElement("div");
+        for (const [tag, value] of [["span", incident.severity], ["strong", incident.reason], ["p", incident.service]]) {
+            const element = document.createElement(tag);
+            element.textContent = String(value);
+            detail.appendChild(element);
+        }
+        const status = document.createElement("span");
+        status.className = "incident-state";
+        status.textContent = incident.status;
+        row.append(detail, status);
+        incidentRows.appendChild(row);
+    }
+    if (!incidents.length) emptyMessage(incidentRows, "No incidents recorded.");
+    setText("active-incident-count", activeCount);
+    const summary = byId("active-incident-summary");
+    if (summary) {
+        summary.replaceChildren();
+        const active = incidents.find(item => item.status === "active");
+        const text = document.createElement("p");
+        text.textContent = active ? `${active.severity}: ${active.reason}` :
+            (activeCount ? "Active incidents exist outside the recent list." : "No active incidents");
+        summary.appendChild(text);
+    }
+}
+
+function checkExpiry() {
+    if (accessToken && Date.now() >= accessExpiresAt) {
+        lockDashboard("Access expired. Unlock again.");
+    }
+}
+
+function scheduleExpiry() {
+    window.clearTimeout(expiryTimer);
+    if (!accessToken) return;
+    const remaining = accessExpiresAt - Date.now();
+    if (remaining <= 0) {
+        checkExpiry();
+        return;
+    }
+    expiryTimer = window.setTimeout(() => {
+        checkExpiry();
+        scheduleExpiry();
+    }, Math.min(remaining, 2147483647));
+}
+
+function lockDashboard(message = "Locked — operational data requires authentication.") {
+    authEpoch += 1;
+    accessToken = "";
+    accessExpiresAt = 0;
+    window.clearTimeout(expiryTimer);
+    canExecuteOperations = false;
+    byId("access-token").value = "";
+    for (const id of ["deployment-version", "deployment-git-sha"]) {
+        if (byId(id)) byId(id).value = "";
+    }
+    setControlsDisabled(true);
+    setText("auth-status", message);
+    setFeedback("Unlock with an operator token to use deployment controls.");
+    updateServiceStatus({name: "demo-api", status: "unknown", ready: false,
+        latency_ms: null, version: "—", git_sha: "—"});
+    for (const id of ["operation-id", "operation-action", "operation-version", "operation-git-sha",
+        "blue-slot-state", "green-slot-state"]) setText(id, "—");
+    setText("operation-status", "LOCKED");
+    renderTimeline(null);
+    renderOperationHistory([]);
+    renderRecords([], [], 0);
+}
+
+function connectAuthentication() {
+    window.addEventListener("focus", checkExpiry);
+    document.addEventListener("visibilitychange", checkExpiry);
+    byId("lock-button")?.addEventListener("click", () => lockDashboard());
+    byId("auth-form")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const token = byId("access-token").value.trim();
+        lockDashboard("Checking access...");
+        const epoch = authEpoch;
+        try {
+            const response = await fetch("/api/auth/me", {
+                credentials: "omit", cache: "no-store",
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            if (epoch !== authEpoch) return;
+            if (!response.ok) throw new Error(await parseError(response));
+            const actor = await response.json();
+            if (epoch !== authEpoch) return;
+            accessExpiresAt = Number(actor.expires_at) * 1000;
+            if (!Number.isFinite(accessExpiresAt) || accessExpiresAt <= Date.now()) {
+                throw new Error("Access expired. Unlock again.");
+            }
+            accessToken = token;
+            scheduleExpiry();
+            canExecuteOperations = actor.deployment_actions_enabled;
+            setText("auth-status", `${actor.name} — ${actor.role}`);
+            setFeedback(canExecuteOperations ? "Operator access enabled." :
+                "Read access enabled; deployment controls are unavailable for this role or runtime.");
+            setControlsDisabled(false);
+            await refreshDashboard();
+            await refreshOperations();
+        } catch (error) {
+            if (epoch === authEpoch) lockDashboard(error.message);
+        }
+    });
+}
+})();

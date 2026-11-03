@@ -1,13 +1,26 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class DeploymentCreate(BaseModel):
-    version: str
-    git_sha: str
-    image: str
+class RecordInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", check_fields=False)
+    @classmethod
+    def valid_text(cls, value):
+        if isinstance(value, str) and any(
+            char == "\x00" or 0xD800 <= ord(char) <= 0xDFFF for char in value
+        ):
+            raise ValueError("Unsupported text characters")
+        return value
+
+
+class DeploymentCreate(RecordInput):
+    version: str = Field(min_length=1, max_length=64)
+    git_sha: str = Field(min_length=1, max_length=64)
+    image: str = Field(min_length=1, max_length=255)
     status: Literal[
         "deploying",
         "success",
@@ -17,10 +30,17 @@ class DeploymentCreate(BaseModel):
     duration_ms: int | None = Field(
         default=None,
         ge=0,
+        le=2**31 - 1,
     )
 
 
-class DeploymentRead(DeploymentCreate):
+class DeploymentRead(BaseModel):
+    # Input hardening must not invalidate records accepted by older releases.
+    version: str
+    git_sha: str
+    image: str
+    status: Literal["deploying", "success", "failed", "rolled_back"]
+    duration_ms: int | None = None
     model_config = ConfigDict(
         from_attributes=True,
     )
@@ -29,8 +49,8 @@ class DeploymentRead(DeploymentCreate):
     created_at: datetime
 
 
-class IncidentCreate(BaseModel):
-    service: str
+class IncidentCreate(RecordInput):
+    service: str = Field(min_length=1, max_length=100)
 
     severity: Literal[
         "info",
@@ -38,7 +58,7 @@ class IncidentCreate(BaseModel):
         "critical",
     ]
 
-    reason: str
+    reason: str = Field(min_length=1, max_length=255)
 
 
 class IncidentRead(BaseModel):
@@ -74,13 +94,13 @@ class DeploymentOperationRequest(BaseModel):
     version: str = Field(
         min_length=1,
         max_length=64,
-        pattern=r"^[A-Za-z0-9._-]+$",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
     )
 
     git_sha: str = Field(
         min_length=1,
         max_length=64,
-        pattern=r"^[A-Za-z0-9._-]+$",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
     )
 
 

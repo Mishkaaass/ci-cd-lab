@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import os
 import re
 from collections.abc import Callable
@@ -6,16 +8,23 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
+    APIRouter,
     BackgroundTasks,
     Depends,
     FastAPI,
     HTTPException,
+    Query,
     Request,
 )
+from fastapi import (
+    Path as ApiPath,
+)
+from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -29,6 +38,7 @@ from opsboard.incidents import (
     list_incidents,
     resolve_incident,
 )
+from opsboard.models import Incident
 from opsboard.monitor import fetch_demo_service_status
 from opsboard.operation_executor import dispatch_operation
 from opsboard.operations import (
@@ -43,6 +53,15 @@ from opsboard.schemas import (
     DeploymentRead,
     IncidentCreate,
     IncidentRead,
+)
+from opsboard.security import (
+    CSP,
+    SECURITY_HEADERS,
+    RequestLimiter,
+    SecurityMiddleware,
+    authentication_ready,
+    deployments_enabled,
+    require_actor,
 )
 
 DatabaseSession = Annotated[
@@ -118,7 +137,65 @@ app = FastAPI(
     title="OpsBoard API",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
 )
+
+app.state.request_limiter = RequestLimiter()
+app.add_middleware(SecurityMiddleware, limiter=app.state.request_limiter)
+api = APIRouter(prefix="/api", dependencies=[Depends(require_actor)])
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+                for error in exc.errors()
+            ]
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request, _exc):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={
+            **SECURITY_HEADERS,
+            "X-Request-ID": getattr(request.state, "request_id", ""),
+        },
+    )
+
+
+@app.get("/docs", include_in_schema=False)
+def api_documentation():
+    response = get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="OpsBoard API",
+        swagger_ui_parameters={"persistAuthorization": False},
+    )
+    scripts = re.findall(r"<script>(.*?)</script>", response.body.decode(), re.S)
+    hashes = " ".join(
+        "'sha256-"
+        + base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+        + "'"
+        for script in scripts
+    )
+    response.headers["Content-Security-Policy"] = (
+        CSP.replace(
+            "script-src 'self'", f"script-src 'self' https://cdn.jsdelivr.net {hashes}"
+        )
+        .replace("style-src 'self'", "style-src 'self' https://cdn.jsdelivr.net")
+        .replace(
+            "img-src 'self' data:", "img-src 'self' data: https://fastapi.tiangolo.com"
+        )
+    )
+    return response
+
 
 app.mount(
     "/static",
@@ -147,30 +224,16 @@ def home():
 )
 def dashboard(
     request: Request,
-    db: DatabaseSession,
 ):
-    service = fetch_demo_service_status()
-
-    deployments = list_deployments(
-        db,
-    )[:10]
-
-    incidents = list_incidents(
-        db,
-    )[:10]
-
-    operations = list_operations(
-        db,
-    )[:10]
-
-    active_incidents = [
-        incident for incident in incidents if incident.status == "active"
-    ]
-
-    latest_deployment = deployments[0] if deployments else None
-
-    latest_operation = operations[0] if operations else None
-
+    # Navigation never embeds operational data. The browser reads protected APIs.
+    service = {
+        "name": "demo-api",
+        "status": "unknown",
+        "ready": False,
+        "latency_ms": None,
+        "version": "—",
+        "git_sha": "—",
+    }
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -180,12 +243,12 @@ def dashboard(
                 "local",
             ),
             "service": service,
-            "deployments": deployments,
-            "latest_deployment": (latest_deployment),
-            "incidents": incidents,
-            "active_incidents": (active_incidents),
-            "operations": operations,
-            "latest_operation": (latest_operation),
+            "deployments": [],
+            "latest_deployment": None,
+            "incidents": [],
+            "active_incidents": [],
+            "operations": [],
+            "latest_operation": None,
         },
     )
 
@@ -201,6 +264,11 @@ def health():
 def readiness(
     db: DatabaseSession,
 ):
+    if not authentication_ready():
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "authentication": "unavailable"},
+        )
     try:
         db.execute(
             text("SELECT 1"),
@@ -235,13 +303,13 @@ def version():
     }
 
 
-@app.get("/api/services/demo")
+@api.get("/services/demo")
 def demo_service_status():
     return fetch_demo_service_status()
 
 
-@app.post(
-    "/api/deployments",
+@api.post(
+    "/deployments",
     response_model=DeploymentRead,
     status_code=201,
 )
@@ -255,20 +323,20 @@ def add_deployment(
     )
 
 
-@app.get(
-    "/api/deployments",
+@api.get(
+    "/deployments",
     response_model=list[DeploymentRead],
 )
 def deployments(
     db: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
 ):
-    return list_deployments(
-        db,
-    )
+    return list_deployments(db, limit=limit, offset=offset)
 
 
-@app.post(
-    "/api/incidents",
+@api.post(
+    "/incidents",
     response_model=IncidentRead,
     status_code=201,
 )
@@ -282,24 +350,24 @@ def add_incident(
     )
 
 
-@app.get(
-    "/api/incidents",
+@api.get(
+    "/incidents",
     response_model=list[IncidentRead],
 )
 def incidents(
     db: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
 ):
-    return list_incidents(
-        db,
-    )
+    return list_incidents(db, limit=limit, offset=offset)
 
 
-@app.post(
-    "/api/incidents/{incident_id}/resolve",
+@api.post(
+    "/incidents/{incident_id}/resolve",
     response_model=IncidentRead,
 )
 def resolve_existing_incident(
-    incident_id: int,
+    incident_id: Annotated[int, ApiPath(ge=1, le=2**31 - 1)],
     db: DatabaseSession,
 ):
     incident = resolve_incident(
@@ -352,8 +420,8 @@ def schedule_operation(
     )
 
 
-@app.post(
-    "/api/operations/deploy-healthy",
+@api.post(
+    "/operations/deploy-healthy",
     response_model=DeploymentOperationRead,
     status_code=202,
 )
@@ -382,8 +450,8 @@ def deploy_healthy(
     return operation
 
 
-@app.post(
-    "/api/operations/deploy-broken",
+@api.post(
+    "/operations/deploy-broken",
     response_model=DeploymentOperationRead,
     status_code=202,
 )
@@ -412,8 +480,8 @@ def deploy_broken(
     return operation
 
 
-@app.post(
-    "/api/operations/rollback",
+@api.post(
+    "/operations/rollback",
     response_model=DeploymentOperationRead,
     status_code=202,
 )
@@ -436,24 +504,24 @@ def rollback(
     return operation
 
 
-@app.get(
-    "/api/operations",
+@api.get(
+    "/operations",
     response_model=list[DeploymentOperationRead],
 )
 def operations(
     db: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
 ):
-    return list_operations(
-        db,
-    )
+    return list_operations(db, limit=limit, offset=offset)
 
 
-@app.get(
-    "/api/operations/{operation_id}",
+@api.get(
+    "/operations/{operation_id}",
     response_model=DeploymentOperationRead,
 )
 def operation(
-    operation_id: int,
+    operation_id: Annotated[int, ApiPath(ge=1, le=2**31 - 1)],
     db: DatabaseSession,
 ):
     result = get_operation(
@@ -468,3 +536,42 @@ def operation(
         )
 
     return result
+
+
+@api.get("/auth/me")
+def actor_identity(request: Request):
+    actor = request.state.actor
+    return {
+        "name": actor.name,
+        "role": actor.role,
+        "can_write": actor.role == "operator",
+        "deployment_actions_enabled": actor.role == "operator"
+        and deployments_enabled(),
+        "expires_at": actor.expires_at,
+    }
+
+
+@api.get("/dashboard")
+def dashboard_data(db: DatabaseSession):
+    return {
+        "service": fetch_demo_service_status(),
+        "deployments": [
+            DeploymentRead.model_validate(item)
+            for item in list_deployments(db, limit=10)
+        ],
+        "incidents": [
+            IncidentRead.model_validate(item) for item in list_incidents(db, limit=10)
+        ],
+        "operations": [
+            DeploymentOperationRead.model_validate(item)
+            for item in list_operations(db, limit=10)
+        ],
+        "active_incident_count": db.scalar(
+            select(func.count())
+            .select_from(Incident)
+            .where(Incident.status == "active")
+        ),
+    }
+
+
+app.include_router(api)

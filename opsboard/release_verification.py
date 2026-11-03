@@ -1,17 +1,29 @@
 import argparse
 import json
 import time
-from urllib.request import urlopen
+from urllib.parse import urlsplit
+
+import httpx
 
 
 def fetch_release_from_url(base_url: str) -> dict:
+    parsed = urlsplit(base_url)
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "Release verification requires an HTTP(S) URL without credentials"
+        )
     url = f"{base_url.rstrip('/')}/version"
-
-    with urlopen(
-        url,
-        timeout=2,
-    ) as response:
-        return json.load(response)
+    with httpx.Client(trust_env=False, follow_redirects=False, timeout=2) as client:
+        response = client.get(url)
+        response.raise_for_status()
+        return response.json()
 
 
 def wait_for_release(

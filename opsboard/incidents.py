@@ -23,8 +23,10 @@ def create_incident(
     return incident
 
 
-def list_incidents(db: Session) -> list[Incident]:
-    statement = select(Incident).order_by(Incident.id.desc())
+def list_incidents(db: Session, *, limit: int = 100, offset: int = 0) -> list[Incident]:
+    statement = (
+        select(Incident).order_by(Incident.id.desc()).limit(limit).offset(offset)
+    )
 
     return list(db.scalars(statement))
 

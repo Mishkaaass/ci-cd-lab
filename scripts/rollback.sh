@@ -266,14 +266,7 @@ print(
 PY
     )
 
-    curl \
-        --fail \
-        --silent \
-        -X POST \
-        "$OPSBOARD_URL/api/deployments" \
-        -H "Content-Type: application/json" \
-        -d "$PAYLOAD" \
-        >/dev/null || true
+    printf '%s' "$PAYLOAD" | python3 -m opsboard.history || true
 
 else
 

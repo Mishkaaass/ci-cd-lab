@@ -18,7 +18,11 @@ def create_deployment(
     return deployment
 
 
-def list_deployments(db: Session) -> list[Deployment]:
-    statement = select(Deployment).order_by(Deployment.id.desc())
+def list_deployments(
+    db: Session, *, limit: int = 100, offset: int = 0
+) -> list[Deployment]:
+    statement = (
+        select(Deployment).order_by(Deployment.id.desc()).limit(limit).offset(offset)
+    )
 
     return list(db.scalars(statement))

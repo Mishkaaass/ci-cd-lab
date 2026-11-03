@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsboard
+spec:
+  selector:
+    app: opsboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsboard
+  template:
+    metadata:
+      labels:
+        app: opsboard
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: opsboard
+          image: ghcr.io/mishkaaass/ci-cd-lab@sha256:b40801a6950e6bf417b72b3e4d4a6b5fb921a78438071b1efd39ccd815292a62
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: APP_ENV
+              value: kubernetes
+            - name: APP_VERSION
+              value: sha-723e942
+            - name: GIT_SHA
+              value: 723e942196e54181c18b4d32e70d4c86da2f24e1
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opsboard-db
+                  key: DATABASE_URL
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

@@ -15,6 +15,7 @@ def dispatch_calls():
 
 @pytest.fixture
 def client(
+    operator_headers,
     dispatch_calls,
     monkeypatch,
 ):
@@ -67,6 +68,7 @@ def client(
     try:
         yield TestClient(
             app_module.app,
+            headers=operator_headers,
         )
     finally:
         app_module.app.dependency_overrides.clear()

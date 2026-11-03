@@ -19,8 +19,6 @@ TestingSession = sessionmaker(
 
 Base.metadata.create_all(bind=engine)
 
-client = TestClient(app)
-
 
 def override_get_db():
     db = TestingSession()
@@ -31,7 +29,8 @@ def override_get_db():
         db.close()
 
 
-def test_incident_lifecycle():
+def test_incident_lifecycle(operator_headers):
+    client = TestClient(app, headers=operator_headers)
     app.dependency_overrides[get_db] = override_get_db
 
     try:
