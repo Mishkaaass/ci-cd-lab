@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/prepare-security-promotion.py"
+INITIAL_MANIFEST = Path(__file__).parent / "fixtures/opsboard-before-security.yaml"
+LIVE_MANIFEST = SCRIPT.parents[1] / "k8s/opsboard/app.yaml"
 
 
 def promotion():
@@ -15,18 +17,25 @@ def promotion():
 
 def test_promotion_updates_digest_metadata_and_auth_together():
     mod = promotion()
-    original = (SCRIPT.parents[1] / "k8s/opsboard/app.yaml").read_text()
+    original = INITIAL_MANIFEST.read_text()
+    live_before = LIVE_MANIFEST.read_bytes()
     image = "ghcr.io/mishkaaass/ci-cd-lab@sha256:" + "a" * 64
     changed = mod.render(original, image, "b" * 40, "opsboard-auth-" + "c" * 12)
     assert image in changed and "value: " + "b" * 40 in changed
     assert "OPSBOARD_AUTH_FILE" in changed and "OPSBOARD_ENABLE_DEPLOYMENTS" in changed
     assert "secretName: opsboard-auth-" + "c" * 12 in changed
-    assert original == (SCRIPT.parents[1] / "k8s/opsboard/app.yaml").read_text()
+    assert "value: sha-bbbbbbb" in changed
+    assert LIVE_MANIFEST.read_bytes() == live_before
 
 
 def test_repeated_auth_wiring_is_rejected():
-    with pytest.raises(ValueError):
-        promotion().render("OPSBOARD_AUTH_FILE", "image", "sha", "secret")
+    mod = promotion()
+    image = "ghcr.io/mishkaaass/ci-cd-lab@sha256:" + "a" * 64
+    secured = mod.render(
+        INITIAL_MANIFEST.read_text(), image, "b" * 40, "opsboard-auth-" + "c" * 12
+    )
+    with pytest.raises(ValueError, match="already wired"):
+        mod.render(secured, image, "d" * 40, "opsboard-auth-" + "e" * 12)
 
 
 def test_canonical_release_sha_is_used_instead_of_downstream_workflow_head():

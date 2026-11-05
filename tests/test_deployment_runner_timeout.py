@@ -13,7 +13,7 @@ def process_is_alive(pid: int) -> bool:
 
     try:
         state = stat_file.read_text().split()[2]
-    except FileNotFoundError, IndexError:
+    except FileNotFoundError, ProcessLookupError, IndexError:
         return False
 
     return state != "Z"
