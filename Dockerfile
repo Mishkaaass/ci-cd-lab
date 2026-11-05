@@ -7,12 +7,16 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update \
-    && apt-get install -y --no-install-recommends --only-upgrade \
+    apt-get -o Acquire::Retries=0 update \
+    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade \
+       apt \
+       libapt-pkg7.0 \
        gzip \
        libpcre2-8-0 \
        libsqlite3-0 \
-       perl-base
+       perl-base \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 3.0.4 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg7.0)" ge 3.0.4
 
 COPY requirements.txt .
 
