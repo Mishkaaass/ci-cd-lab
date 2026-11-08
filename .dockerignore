@@ -1,6 +1,36 @@
+# Git and local environments
 .git
-.venv
-__pycache__
-.pytest_cache
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
 *.pyc
+
+# Local configuration, credentials, and development databases
 .env
+.env.*
+*.token
+*.pem
+*.key
+.opsboard-credentials/
+*.db
+*.sqlite
+*.sqlite3
+
+# Build outputs, reports, and exported review bundles
+artifacts/
+*.log
+*.zip
+*.tar
+*.tar.gz
+build/
+dist/
+
+# Not needed by either the OpsBoard or blue/green demo Docker image
+.github/
+_review/
+docs/
+tests/
+k8s/
+nginx/

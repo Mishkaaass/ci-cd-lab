@@ -23,6 +23,8 @@ Create the `opsboard` namespace and these Secrets locally, outside Git:
   `POSTGRES_PASSWORD` and `DATABASE_URL` pointing to `postgres:5432`.
 - An Argo CD repository Secret in `argocd`: a dedicated read-only Git credential
   for `https://github.com/Mishkaaass/ci-cd-lab.git`.
+- `opsboard/opsboard-auth-<hash>`: an auth JSON Secret matching the `secretName`
+  mounted in `app.yaml` (a versioned name derived from private auth configuration).
 
 Preserve the original database credentials when reusing its PVC.
 The local-path PVC survives Pod replacement. It is not a backup and does not
@@ -36,10 +38,14 @@ The AppProject permits only Services, Deployments and StatefulSets in `opsboard`
 Automatic pruning is disabled; the Application has no cascading-deletion finalizer.
 These settings do not prevent an operator from explicitly deleting cluster data.
 
-CI/CD publishes verified images but does not yet change the GitOps image digest.
-To promote a new verified application image, update `image`, `APP_VERSION` and
-`GIT_SHA` together in `app.yaml`, then review and merge that change.
-Rollback uses a reviewed Git revert of the relevant deployment change.
+CI/CD publishes verified images but **does not automatically change** the
+GitOps image digest. To promote a new verified application image, update
+`image`, `APP_VERSION` and `GIT_SHA` together in `app.yaml`, then review and
+merge that change. A GitOps commit SHA can differ from the application build
+SHA: `/version` reports the latter. See [Release checklist](release-checklist.md).
+Rollback restores the previous **verified image and matching version metadata**
+through a reviewed GitOps PR/revert; never roll back by mutating the running
+Deployment directly.
 
 The existing dashboard deployment controls still target the Docker Compose demo;
 they do not control this Kubernetes deployment.

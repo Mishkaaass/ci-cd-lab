@@ -36,7 +36,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: opsboard
-          image: ghcr.io/mishkaaass/ci-cd-lab@sha256:6dd4398620e3c837f19df415548dcbd001efa13f86eb829fde4bc019a1cfdc64
+          image: ghcr.io/mishkaaass/ci-cd-lab@sha256:631cce45ce80bdfa942366b72d2590b91f6bea9bb30a57ea72bd996a29bc04b6
           ports:
             - name: http
               containerPort: 8000
@@ -48,9 +48,9 @@ spec:
             - name: APP_ENV
               value: kubernetes
             - name: APP_VERSION
-              value: sha-af6bb0f
+              value: sha-368b494
             - name: GIT_SHA
-              value: af6bb0f2597cbf9e185e324c85390bddde48104d
+              value: 368b494202d42ad79d19a8d627601c75334ffc36
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

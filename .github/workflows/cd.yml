@@ -96,6 +96,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # workflow_run may complete out of order; a stale build must not reset latest.
+      - name: Refuse stale main release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [ "$main_sha" != "$TESTED_SHA" ]; then
+            echo "::error::Newer main commit exists; refusing to overwrite latest"
+            exit 1
+          fi
+
       - name: Promote verified image to latest
         env:
           CANDIDATE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}

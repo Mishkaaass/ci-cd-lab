@@ -33,7 +33,7 @@ The following creates only new private credential files and a new SQLite lab DB:
 ```bash
 (
 set -euo pipefail
-cd "$HOME/projects/ci-cd-lab-security-hardening"
+cd "$(git rev-parse --show-toplevel)"
 mkdir -p "$HOME/.config/ci-cd-platform"
 security_dir=$(mktemp -d "$HOME/.config/ci-cd-platform/security-lab.XXXXXX")
 python3 scripts/create-security-credentials.py "$security_dir/credentials"
@@ -116,7 +116,7 @@ Scan/rule duration limits are disabled inside ZAP; the outer 15-minute deadline
 fails the entire scan rather than treating partial results as success. Rule10202
 (anti-CSRF token) is explicitly excluded for this bearer-only API: mutations have
 no ambient cookie authentication. No broad vulnerability ignore list is added.
-Sanitized JSON reports omit the generated credentials and are uploaded for7 days.
+Sanitized JSON reports omit the generated credentials and are uploaded for 7 days.
 
 CD runs only after successful same-repository push CI on main. It retains digest,
 SBOM/provenance and image scanning, then tests the published digest with the same
@@ -137,12 +137,18 @@ History failure warns and does not change the traffic-switch result. Keep this
 privileged backend restricted to trusted operators; its Docker/sudo access remains
 powerful. Command output capture is not a general log-volume defense.
 
-## Kubernetes activation is a separate promotion
+## Kubernetes image promotion is a separate reviewed change
 
-The existing Kubernetes manifest deliberately continues to pin the old verified
-image. This source patch alone does not secure that running deployment. Do not
-mount new auth configuration into an old release and assume it enforces access.
-First merge/release this change and obtain a successful security-enabled CD run.
+A successful CD run publishes and verifies an image; it does not update the
+GitOps manifest. Check the actual `image`, `APP_VERSION` and `GIT_SHA` values
+in `k8s/opsboard/app.yaml` before claiming a new Kubernetes release. The
+manifest may intentionally point to an earlier verified image. Avoid any
+manual `kubectl set image` that would drift from Git.
+
+The helper below is **only for a first-time rollout** where auth is not wired
+into the manifest yet. The current Kubernetes manifest already has auth wiring;
+for later promotions, review and update the three application release fields
+together using [the release checklist](release-checklist.md).
 
 From a clean branch containing this code, preview:
 
