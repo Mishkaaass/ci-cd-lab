@@ -1,6 +1,11 @@
 # syntax=docker/dockerfile:1
 FROM python:3.14-slim
 
+# Upgrade zlib1g to the Debian security-fixed package.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g
+
+
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
