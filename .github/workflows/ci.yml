@@ -126,27 +126,20 @@ jobs:
       - name: Build Docker image
         run: docker build -t ci-cd-lab:ci .
 
-      - name: Set up Trivy (verified GitHub release)
+      - name: Set up Trivy (official container image)
         shell: bash
         run: |
           set -euo pipefail
-          test "$(uname -s)" = Linux
-          test "$(uname -m)" = x86_64
-          version=0.76.1
-          archive="trivy_${version}_Linux-64bit.tar.gz"
-          checksums="trivy_${version}_checksums.txt"
-          base="https://github.com/aquasecurity/trivy/releases/download/v${version}"
-          temp="$(mktemp -d "${RUNNER_TEMP}/trivy-install.XXXXXX")"
-          for file in "$archive" "$checksums"; do
-            curl --fail --location --silent --show-error \
-              --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 240 \
-              --output "${temp}/${file}" "${base}/${file}"
-          done
-          awk -v name="$archive" '$2 == name {print; n++} END {if (n != 1) exit 1}' \
-            "${temp}/${checksums}" | (cd "$temp" && sha256sum -c -)
+          image="docker.io/aquasec/trivy:0.76.2"
+          docker pull "$image"
+          docker image inspect "$image" --format '{{json .RepoDigests}}'
           install -d "${RUNNER_TEMP}/trivy-bin"
-          tar -xzf "${temp}/${archive}" -C "${RUNNER_TEMP}/trivy-bin" trivy
+          cid="$(docker create "$image")"
+          trap 'docker container rm "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/local/bin/trivy" "${RUNNER_TEMP}/trivy-bin/trivy"
+          chmod 0755 "${RUNNER_TEMP}/trivy-bin/trivy"
           "${RUNNER_TEMP}/trivy-bin/trivy" --version
+          "${RUNNER_TEMP}/trivy-bin/trivy" --version | grep -Fx 'Version: 0.76.2'
           echo "${RUNNER_TEMP}/trivy-bin" >> "$GITHUB_PATH"
       - name: Check Kubernetes configuration
         run: trivy config --severity HIGH,CRITICAL --exit-code 1 k8s
