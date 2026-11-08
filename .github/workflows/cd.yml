@@ -61,11 +61,21 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
 
-      - name: Set up Trivy
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
-        with:
-          version: v0.76.1
-
+      - name: Set up Trivy (official container image)
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="docker.io/aquasec/trivy:0.76.2"
+          docker pull "$image"
+          docker image inspect "$image" --format '{{json .RepoDigests}}'
+          install -d "${RUNNER_TEMP}/trivy-bin"
+          cid="$(docker create "$image")"
+          trap 'docker container rm "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/local/bin/trivy" "${RUNNER_TEMP}/trivy-bin/trivy"
+          chmod 0755 "${RUNNER_TEMP}/trivy-bin/trivy"
+          "${RUNNER_TEMP}/trivy-bin/trivy" --version
+          "${RUNNER_TEMP}/trivy-bin/trivy" --version | grep -Fx 'Version: 0.76.2'
+          echo "${RUNNER_TEMP}/trivy-bin" >> "$GITHUB_PATH"
       - name: Check container security policy
         env:
           IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}

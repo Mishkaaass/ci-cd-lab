@@ -1,6 +1,6 @@
 # Container security policy
 
-CI and CD run the same `scripts/scan-image.sh` with Trivy v0.76.1.
+CI and CD run the same `scripts/scan-image.sh` with Trivy v0.76.2.
 Both OS and language packages are scanned.
 
 | Finding | Release decision |
