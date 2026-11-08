@@ -153,3 +153,45 @@ def test_dashboard_renders_operational_data(
     assert operation["git_sha"] == "release200"
 
     assert "/static/dashboard.js" in html
+
+
+def test_local_lab_route_is_read_only_and_matches_config(tmp_path, monkeypatch):
+    config = tmp_path / "active_backend.inc"
+    config.write_text("server demo-green:8000;\n")
+    monkeypatch.setattr(app_module, "NGINX_ACTIVE_BACKEND_CONFIG", config)
+    assert app_module.configured_active_lab_slot() == "green"
+    config.write_text("server demo-blue:8000;\n")
+    assert app_module.configured_active_lab_slot() == "blue"
+    config.write_text("server demo-blue:8000;\nserver demo-green:8000;\n")
+    assert app_module.configured_active_lab_slot() is None
+    config.unlink()
+    assert app_module.configured_active_lab_slot() is None
+
+
+def test_dashboard_explains_local_cli_vs_api_history(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "local")
+    test_client, _session = client
+    response = test_client.get("/dashboard")
+    assert response.status_code == 200
+    assert "Guided Local Lab" in response.text or "GUIDED WALKTHROUGH" in response.text
+    assert "Actual CLI release history" in response.text
+    assert "API-queued operations appear here" in response.text
+
+
+def test_dashboard_api_reports_configured_route(client, tmp_path, monkeypatch):
+    test_client, _session = client
+    config = tmp_path / "active_backend.inc"
+    config.write_text("server demo-green:8000;\n")
+    monkeypatch.setattr(app_module, "NGINX_ACTIVE_BACKEND_CONFIG", config)
+    monkeypatch.setattr(
+        app_module,
+        "fetch_demo_service_status",
+        lambda: {
+            "name": "demo-api", "status": "healthy", "ready": True,
+            "latency_ms": 4, "version": "v2", "git_sha": "sha123",
+        },
+    )
+    response = test_client.get("/api/dashboard")
+    assert response.status_code == 200
+    assert response.json()["local_lab"]["configured_active_slot"] == "green"
+    assert response.json()["local_lab"]["control_mode"] == "api"

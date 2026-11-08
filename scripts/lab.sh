@@ -101,6 +101,7 @@ start_dashboard() {
   export DEMO_SERVICE_URL="$DEMO_URL"
   export OPSBOARD_ALLOWED_HOSTS="127.0.0.1,localhost"
   export OPSBOARD_ENABLE_DEPLOYMENTS=false
+  export OPSBOARD_LAB_EVENT_FILE="$LAB_DIR/cli-operations.log"
   export OPSBOARD_URL="$DASHBOARD_URL"
   exec .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 18001 \
     --no-access-log --no-server-header --no-proxy-headers
@@ -113,13 +114,18 @@ check_demo_ports() {
   local port service owner own_id ports_message
   for row in '5432 db' '8001 demo-blue' '8002 demo-green' '8080 nginx'; do
     read -r port service <<< "$row"
-    owner="$(sudo docker ps -q --filter "publish=$port")"
-    own_id="$(sudo docker compose ps -q "$service")"
+    owner="$(sudo docker ps --no-trunc -q --filter "publish=$port")"
+    own_id="$(sudo docker compose ps --no-trunc -q "$service")"
     if [ -n "$owner" ]; then
       if [ -z "$own_id" ] || [ "$owner" != "$own_id" ]; then
-        printf '\nPort %s is used by another Docker service. Existing containers:\n' "$port" >&2
+        printf '\nPort %s belongs to another running Docker service:\n' "$port" >&2
         sudo docker ps --filter "publish=$port" --format 'table {{.Names}}\t{{.Ports}}' >&2
-        stop "port $port conflict; inspect the old service. Nothing has been stopped or removed."
+        stop "port $port conflict; choose the owning checkout or stop the old stack intentionally. No changes made."
+      fi
+      local owning_root
+      owning_root="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$owner")"
+      if [ "$owning_root" != "$ROOT" ]; then
+        stop "port $port uses Compose from $owning_root; current checkout is $ROOT. Use the owner's checkout, or manually stop the old stack before starting here. Nothing stopped."
       fi
       continue
     fi
@@ -135,11 +141,23 @@ PY
   done
 }
 
+guard_compose_checkout() {
+  local service ids id owning_root
+  for service in db demo-blue demo-green nginx; do
+    ids="$(sudo docker compose ps --all --no-trunc -q "$service")"
+    for id in $ids; do
+      owning_root="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id")"
+      [ "$owning_root" = "$ROOT" ] || stop "Existing $service container belongs to $owning_root, not $ROOT. Use one checkout; no containers changed."
+    done
+  done
+}
+
 start_demo() {
   need sudo
   need curl
   sudo docker info >/dev/null || stop "Docker is unavailable; start Docker Engine and retry"
   sudo docker compose config --quiet || stop "Docker Compose config invalid"
+  guard_compose_checkout
   check_demo_ports
   printf '\nStarting the four local demo services (no volume deletion)...\n'
   sudo docker compose up -d --build db demo-blue demo-green nginx
@@ -166,6 +184,7 @@ status() {
     printf 'Not running/ready (start it with: bash scripts/lab.sh start)\n'
   fi
   printf '\n=== Nginx blue/green demo on port 8080 ===\n'
+  printf 'Note: endpoint health alone does not prove the containers belong to this checkout.\n'
   if ! curl -fsS --max-time 3 "$DEMO_URL/version"; then
     printf 'Not running/ready (start it with: bash scripts/lab.sh demo)\n'
   fi
@@ -194,6 +213,38 @@ except Exception:
 PY
 }
 
+ensure_demo_ownership() {
+  need sudo
+  sudo docker info >/dev/null || stop "Docker unavailable"
+  local service owner_root ids id
+  for service in db demo-blue demo-green nginx; do
+    ids="$(sudo docker compose ps --no-trunc -q "$service")"
+    [ -n "$ids" ] || stop "Compose service $service is missing; first run 'bash scripts/lab.sh demo'"
+    for id in $ids; do
+      owner_root="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id")"
+      [ "$owner_root" = "$ROOT" ] || stop "service $service belongs to another checkout ($owner_root). Do not deploy from $ROOT."
+    done
+  done
+}
+
+run_logged_release() {
+  local action="$1" version="$2" sha="$3"
+  shift 3
+  local events="$LAB_DIR/cli-operations.log"
+  [ -d "$LAB_DIR" ] || stop "lab state directory missing; start the dashboard first"
+  [ ! -L "$events" ] || stop "event log is a symlink; refusing to append"
+  [ ! -e "$events" ] || [ -f "$events" ] || stop "unexpected event log type"
+  umask 077
+  printf 'OPSBOARD_LAB|begin|%s|%s|%s\n' "$action" "$version" "$sha" >> "$events"
+  set +e
+  bash "$@" | tee -a "$events"
+  local -a codes=("${PIPESTATUS[@]}")
+  set -e
+  printf 'OPSBOARD_LAB|finish|%s\n' "${codes[0]}" >> "$events"
+  [ "${codes[1]}" -eq 0 ] || stop "unable to record CLI progress; preserve the log"
+  return "${codes[0]}"
+}
+
 demo_deploy() {
   [ "$#" -eq 3 ] || stop "usage: bash scripts/lab.sh deploy healthy|broken VERSION GIT_SHA"
   local mode="$1" version="$2" sha="$3" active target
@@ -207,22 +258,28 @@ demo_deploy() {
     green) target=blue ;;
     *) stop "cannot identify the active blue/green slot; no files changed" ;;
   esac
+  ensure_demo_ownership
   check_local_api
   export PATH="$ROOT/.venv/bin:$PATH"
   export OPSBOARD_URL="$DASHBOARD_URL"
   export OPSBOARD_RECORD_TOKEN_FILE="$AUTH_DIR/operator.token"
   printf 'Active slot: %s; deploying candidate to inactive slot: %s\n' "$active" "$target"
   printf 'This WILL recreate the inactive demo container and may switch Nginx after checks.\n'
-  bash scripts/deploy.sh "$target" "$version" "$sha" "$mode"
+  local action="deploy_healthy"
+  [ "$mode" = broken ] && action="deploy_broken"
+  run_logged_release "$action" "$version" "$sha" \
+    scripts/deploy.sh "$target" "$version" "$sha" "$mode"
 }
 
 demo_rollback() {
+  ensure_demo_ownership
   check_local_api
   export PATH="$ROOT/.venv/bin:$PATH"
   export OPSBOARD_URL="$DASHBOARD_URL"
   export OPSBOARD_RECORD_TOKEN_FILE="$AUTH_DIR/operator.token"
   printf 'This will switch local Nginx back to the other ready demo slot.\n'
-  bash scripts/rollback.sh
+  run_logged_release rollback '' '' \
+    scripts/rollback.sh
 }
 
 case "${1:-help}" in

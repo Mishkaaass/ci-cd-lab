@@ -5,6 +5,7 @@ let authEpoch = 0;
 let accessExpiresAt = 0;
 let expiryTimer;
 let canExecuteOperations = false;
+let configuredLabSlot = null;
 const responseEpochs = new WeakMap();
 
 const ACTIVE_STATUSES = new Set([
@@ -83,6 +84,12 @@ function updateSlotDisplay(operation) {
 
     blueState.textContent = "—";
     greenState.textContent = "—";
+
+    if (configuredLabSlot === "blue" || configuredLabSlot === "green") {
+        blueState.textContent = configuredLabSlot === "blue" ? "Configured active" : "Standby";
+        greenState.textContent = configuredLabSlot === "green" ? "Configured active" : "Standby";
+        return;
+    }
 
     if (operation?.slot === "blue") {
         blueState.textContent =
@@ -591,6 +598,52 @@ function updateServiceStatus(service) {
 }
 
 
+function renderLocalLab(data) {
+    const lab = data.local_lab || {};
+    configuredLabSlot = lab.configured_active_slot || null;
+    setText("lab-active-slot", configuredLabSlot ? configuredLabSlot.toUpperCase() : "Unknown");
+    setText("lab-live-version", data.service?.version || "Unknown");
+    const cli = lab.cli_operation;
+    setText("lab-cli-state", cli
+        ? `${cli.action.replaceAll("_", " ")} · ${cli.status.toUpperCase()}`
+        : "No terminal operation recorded");
+    const progress = byId("lab-cli-timeline");
+    if (progress) {
+        progress.replaceChildren();
+        if (!cli?.steps?.length) {
+            emptyMessage(progress, "No CLI progress events yet.");
+        } else {
+            for (const step of cli.steps) {
+                progress.appendChild(createTimelineStep(step));
+            }
+        }
+    }
+    const records = data.deployments || [];
+    const newest = records[0];
+    const outcomes = {failed: "FAILED", success: "SUCCESS", rolled_back: "ROLLED BACK", deploying: "DEPLOYING"};
+    setText("lab-latest-result", newest
+        ? `${outcomes[newest.status] || newest.status.toUpperCase()} · ${newest.version}`
+        : "No recorded releases");
+    const container = byId("lab-events");
+    if (!container) return;
+    container.replaceChildren();
+    if (!records.length) {
+        emptyMessage(container, "No CLI releases recorded in this dashboard database yet.");
+        return;
+    }
+    for (const record of records.slice(0, 5)) {
+        const row = document.createElement("div");
+        row.className = "lab-event-row";
+        const label = document.createElement("strong");
+        label.textContent = `${outcomes[record.status] || record.status.toUpperCase()} · ${record.version}`;
+        const details = document.createElement("span");
+        details.textContent = `${record.git_sha} · ${record.duration_ms ?? "—"} ms`;
+        row.append(label, details);
+        container.appendChild(row);
+    }
+}
+
+
 async function refreshDashboard() {
     if (!accessToken) return;
     try {
@@ -602,6 +655,8 @@ async function refreshDashboard() {
 
         const data = await authorizedJSON(response);
         updateServiceStatus(data.service);
+        renderLocalLab(data);
+        updateSlotDisplay(data.operations[0] || null);
         renderRecords(data.deployments, data.incidents, data.active_incident_count);
         renderOperationHistory(data.operations);
         if (data.operations.length) renderOperation(data.operations[0]);
@@ -778,6 +833,7 @@ function lockDashboard(message = "Locked — operational data requires authentic
     accessExpiresAt = 0;
     window.clearTimeout(expiryTimer);
     canExecuteOperations = false;
+    configuredLabSlot = null;
     byId("access-token").value = "";
     for (const id of ["deployment-version", "deployment-git-sha"]) {
         if (byId(id)) byId(id).value = "";
@@ -793,6 +849,17 @@ function lockDashboard(message = "Locked — operational data requires authentic
     renderTimeline(null);
     renderOperationHistory([]);
     renderRecords([], [], 0);
+    setText("lab-active-slot", "Unlock to inspect");
+    setText("lab-live-version", "—");
+    setText("lab-latest-result", "—");
+    setText("lab-cli-state", "Locked");
+    const labSteps = byId("lab-cli-timeline");
+    if (labSteps) labSteps.replaceChildren();
+    const labEvents = byId("lab-events");
+    if (labEvents) {
+        labEvents.replaceChildren();
+        emptyMessage(labEvents, "Unlock the dashboard to view recorded lab activity.");
+    }
 }
 
 function connectAuthentication() {
@@ -822,7 +889,10 @@ function connectAuthentication() {
             canExecuteOperations = actor.deployment_actions_enabled;
             setText("auth-status", `${actor.name} — ${actor.role}`);
             setFeedback(canExecuteOperations ? "Operator access enabled." :
-                "Read access enabled; deployment controls are unavailable for this role or runtime.");
+                "Read access enabled. Use terminal commands for this safe local lab.");
+            setText("control-mode-hint", canExecuteOperations
+                ? "API deployment controls are enabled for this runtime."
+                : "Deployment controls are disabled in this runtime. In local mode, use the guided terminal lab above.");
             setControlsDisabled(false);
             await refreshDashboard();
             await refreshOperations();
