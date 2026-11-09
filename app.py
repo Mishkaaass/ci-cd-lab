@@ -38,6 +38,7 @@ from opsboard.incidents import (
     list_incidents,
     resolve_incident,
 )
+from opsboard.lab_events import latest_cli_operation
 from opsboard.models import Incident
 from opsboard.monitor import fetch_demo_service_status
 from opsboard.operation_executor import dispatch_operation
@@ -109,6 +110,20 @@ def resolve_inactive_slot(
         return "green"
 
     return "blue"
+
+
+def configured_active_lab_slot() -> str | None:
+    """Read the configured Compose route; Nginx live identity is probed separately.
+
+    This file is intentionally absent from the Kubernetes image. In that case,
+    the dashboard should show unknown rather than invent a slot.
+    """
+    try:
+        content = NGINX_ACTIVE_BACKEND_CONFIG.read_text()
+    except OSError:
+        return None
+    matches = ACTIVE_BACKEND_PATTERN.findall(content)
+    return matches[0] if len(matches) == 1 else None
 
 
 def deployment_target_slot() -> str:
@@ -555,6 +570,11 @@ def actor_identity(request: Request):
 def dashboard_data(db: DatabaseSession):
     return {
         "service": fetch_demo_service_status(),
+        "local_lab": {
+            "configured_active_slot": configured_active_lab_slot(),
+            "control_mode": "api" if deployments_enabled() else "terminal",
+            "cli_operation": latest_cli_operation(os.getenv("OPSBOARD_LAB_EVENT_FILE")),
+        },
         "deployments": [
             DeploymentRead.model_validate(item)
             for item in list_deployments(db, limit=10)

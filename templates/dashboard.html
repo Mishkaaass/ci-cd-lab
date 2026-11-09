@@ -60,6 +60,59 @@
     </section>
 
 
+    {% if environment != "kubernetes" %}
+    <section class="card lab-guide" aria-labelledby="lab-guide-title">
+        <div class="card-header">
+            <div>
+                <p class="card-label">LOCAL LAB / GUIDED WALKTHROUGH</p>
+                <h2 id="lab-guide-title">See a release fail, succeed, then roll back</h2>
+            </div>
+            <span class="safe-badge">TERMINAL-CONTROLLED</span>
+        </div>
+        <p class="control-description">
+            Use the commands below in a second terminal in the same checkout.
+            This page observes the actual Nginx version and records CLI results
+            automatically; the web server is not given root-level Docker access.
+        </p>
+        <div class="lab-stats" aria-label="Local release state">
+            <div><span>CONFIGURED ROUTE</span><strong id="lab-active-slot">Unlock to inspect</strong></div>
+            <div><span>LIVE RELEASE</span><strong id="lab-live-version">—</strong></div>
+            <div><span>LAST CLI RESULT</span><strong id="lab-latest-result">—</strong></div>
+        </div>
+        <div class="lab-guided-steps">
+            <div class="lab-step-guide">
+                <strong>1. Rejected candidate</strong>
+                <code>bash scripts/lab.sh deploy broken v2.0.0 broken001</code>
+                <p>Expected failure: readiness never passes; active traffic stays on its prior version.</p>
+            </div>
+            <div class="lab-step-guide">
+                <strong>2. Verified promotion</strong>
+                <code>bash scripts/lab.sh deploy healthy v2.0.1 healthy001</code>
+                <p>Checks readiness and release identity before reloading Nginx.</p>
+            </div>
+            <div class="lab-step-guide">
+                <strong>3. Verified rollback</strong>
+                <code>bash scripts/lab.sh rollback</code>
+                <p>Routes traffic back only after the previous slot passes readiness.</p>
+            </div>
+        </div>
+        <div class="lab-events-header">
+            <strong>Live CLI execution steps (latest run)</strong>
+            <span id="lab-cli-state">No CLI operation recorded</span>
+        </div>
+        <div id="lab-cli-timeline" class="lab-cli-timeline">
+            <p class="empty">Execute a terminal lab command to stream its steps here.</p>
+        </div>
+        <div class="lab-events-header">
+            <strong>Actual CLI release history</strong>
+            <span>Updates every 5 seconds after Unlock</span>
+        </div>
+        <div id="lab-events" class="lab-events" aria-live="polite">
+            <p class="empty">Unlock the dashboard to view recorded lab activity.</p>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="overview-grid">
 
         <article class="card service-card">
@@ -348,6 +401,16 @@
             </div>
 
 
+            <p class="control-description" id="control-mode-hint">
+                {% if environment == "kubernetes" %}
+                Kubernetes releases are managed via GitOps. Browser Docker
+                deployment controls are disabled in this environment.
+                {% else %}
+                Safe starter mode: use the terminal commands in the guided lab above.
+                Browser deployment buttons are intentionally disabled.
+                {% endif %}
+            </p>
+
             <div
                 id="control-feedback"
                 class="control-feedback"
@@ -527,6 +590,11 @@
 
             </div>
 
+
+            <p class="control-description">
+                API-queued operations appear here. Terminal-driven releases appear
+                in the guided local lab and Recent Deployments instead.
+            </p>
 
             <div
                 id="operation-timeline"
