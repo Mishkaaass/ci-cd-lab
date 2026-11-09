@@ -187,8 +187,12 @@ def test_dashboard_api_reports_configured_route(client, tmp_path, monkeypatch):
         app_module,
         "fetch_demo_service_status",
         lambda: {
-            "name": "demo-api", "status": "healthy", "ready": True,
-            "latency_ms": 4, "version": "v2", "git_sha": "sha123",
+            "name": "demo-api",
+            "status": "healthy",
+            "ready": True,
+            "latency_ms": 4,
+            "version": "v2",
+            "git_sha": "sha123",
         },
     )
     response = test_client.get("/api/dashboard")

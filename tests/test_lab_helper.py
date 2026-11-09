@@ -8,7 +8,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 SOURCE = Path(__file__).resolve().parents[1] / "scripts/lab.sh"
 
 
@@ -60,7 +59,11 @@ esac
     }
     result = subprocess.run(
         ["bash", str(root / "scripts/lab.sh"), *action],
-        cwd=root, env=env, text=True, capture_output=True, timeout=12,
+        cwd=root,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=12,
     )
     return result, log.read_text() if log.exists() else ""
 

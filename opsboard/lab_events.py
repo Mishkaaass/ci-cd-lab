@@ -14,9 +14,7 @@ BEGIN = re.compile(
     r"^OPSBOARD_LAB\|begin\|(deploy_healthy|deploy_broken|rollback)\|"
     r"([A-Za-z0-9._-]{0,64})\|([A-Za-z0-9._-]{0,64})$"
 )
-STEP = re.compile(
-    r"^OPSBOARD_STEP\|(running|success|failed)\|([A-Za-z0-9 /_-]{1,80})$"
-)
+STEP = re.compile(r"^OPSBOARD_STEP\|(running|success|failed)\|([A-Za-z0-9 /_-]{1,80})$")
 FINISH = re.compile(r"^OPSBOARD_LAB\|finish\|(0|[1-9][0-9]{0,2})$")
 
 
