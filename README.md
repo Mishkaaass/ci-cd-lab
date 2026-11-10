@@ -1,226 +1,153 @@
-# OpsBoard — CI/CD, Blue/Green & GitOps Lab
+# OpsBoard
 
-A hands-on DevOps portfolio project: **run an operations dashboard, deliberately break a release, recover traffic, and trace the same release principles through GitHub Actions, GHCR, Argo CD and Kubernetes**.
+**CI/CD · Blue/Green Deployments · Security · GitOps**
 
-> **Start here:** This is a **local learning lab**, not a production-ready hosting service. You do **not** need AWS, Kubernetes or an existing database just to explore the dashboard. The dashboard's local demo and the GitOps Kubernetes deployment are **two separate environments**.
+[![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/Mishkaaass/ci-cd-lab/releases/tag/v1.0.0)
 
-## In two minutes: what am I looking at?
+A hands-on DevOps lab: **make a release, reject a broken deployment, switch live traffic, and roll back safely.** It combines a FastAPI dashboard, Docker Compose, GitHub Actions, GHCR, Kubernetes and Argo CD.
 
-| Part | Why it exists | Where it runs |
-| --- | --- | --- |
-| **OpsBoard dashboard** | Shows service status, deployments, incidents and operation history | FastAPI on `127.0.0.1:18001` |
-| **Blue / Green demo** | Keeps one service active while testing a replacement before switching traffic | Docker Compose: `demo-blue`, `demo-green`, Nginx |
-| **Local data** | Stores dashboard incidents and deployment records for this walkthrough | Private SQLite file on your computer |
-| **CI** | Checks every pull request and push to `main` | GitHub Actions (seven jobs) |
-| **CD** | Builds, scans, tests and publishes a verifiable Docker image | GitHub Actions + GHCR |
-| **GitOps** | Deploys a *chosen, digest-pinned* release, with Git as the desired state | Argo CD + local Kind Kubernetes + PostgreSQL PVC |
+> **Know the difference:** The local Blue/Green demo and the Kubernetes GitOps deployment are **separate environments**. A successful CD run publishes an image; it **does not automatically deploy it** to Kubernetes. This is a learning lab, not a public production service.
+
+## 1. Architecture
+
+**Local lab — the part you can run on your laptop**
 
 ```mermaid
-flowchart TB
-    subgraph Local[1. Local hands-on demo]
-      Browser[Your browser] --> Dashboard[OpsBoard / FastAPI :18001]
-      Dashboard --> SQLite[(Local SQLite: history + incidents)]
-      Dashboard -->|Monitors /ready and /version| Proxy[Nginx :8080]
-      CLI[Lab CLI / deploy.sh] -->|Starts and checks inactive slot| Blue[Blue container]
-      CLI --> Green[Green container]
-      CLI -->|Only after checks pass| Proxy
-      Proxy --> Blue
-      Proxy -.->|Switchable| Green
-    end
-    subgraph Delivery[2. Automated delivery and GitOps]
-      Git[PR / main] --> CI[CI: seven test + security jobs]
-      CI --> CD[CD: build + scan + test]
-      CD --> Registry[GHCR: verified image digest]
-      Registry -.->|Separate reviewed promotion PR| Manifest[GitOps manifest on main]
-      Manifest --> Argo[Argo CD]
-      Argo --> K8s[Kind: OpsBoard + PostgreSQL PVC]
-    end
+flowchart LR
+    User[Browser] --> UI["OpsBoard · FastAPI<br/>localhost:18001"]
+    UI --> DB[("SQLite<br/>history & incidents")]
+    UI -.->|Observe health| Proxy["Nginx · localhost:8080"]
+    CLI["lab.sh<br/>deploy / rollback"] --> Gate{"Ready + correct<br/>version?"}
+    Gate -->|Yes: switch| Proxy
+    Gate -->|No: reject| Safe[Keep current release]
+    Proxy --> Blue["Blue · :8001"]
+    Proxy --> Green["Green · :8002"]
 ```
 
-## Quick start — no prior knowledge of this repo required
+Nginx sends traffic to **one slot at a time**. The other slot is where a new candidate is tested. The browser observes the process; the **terminal controls deployment** by default.
 
-**Requirements:** Ubuntu/Linux terminal, Git, Python **3.14** (with `venv` and `pip`), and `curl`. Docker Engine with `docker compose` is required **only** for the Blue/Green demo. Your Linux account may need `sudo` to access Docker. Check your tools with `python3.14 --version` and `sudo docker compose version`.
+**Automated delivery — the path from Git to Kubernetes**
 
-### Step 0 — Get the code and find the "repository root"
+```mermaid
+flowchart LR
+    Git["Pull request / main"] --> CI["GitHub CI<br/>7 test + security jobs"]
+    CI -->|Successful main build| CD["CD<br/>build · scan · verify"]
+    CD --> GHCR["GHCR<br/>immutable image digest"]
+    GHCR -.->|Reviewed promotion PR| Manifest["GitOps manifest<br/>k8s/opsboard"]
+    Manifest --> Argo[Argo CD]
+    Argo --> K8s["Kubernetes / Kind<br/>OpsBoard + PostgreSQL PVC"]
+```
 
-The **repository root** is the folder containing `app.py`, `compose.yml` and `scripts/`. It is **not** an arbitrary folder under `~/projects`.
+## 2. Quick start (two terminals)
 
-**First-time visitor:**
+**You need:** Linux/Ubuntu, Git, Python **3.14**, `curl`, and Docker Engine + Compose v2 for the Blue/Green demo. On Linux, Docker commands may require `sudo`. Clone with a GitHub account that has repository access.
 
 ```bash
 git clone https://github.com/Mishkaaass/ci-cd-lab.git
 cd ci-cd-lab
-ls app.py compose.yml scripts/lab.sh
 ```
 
-If the clone requires authentication, sign into GitHub with an account that can access this repository.
+If you already cloned it, **use that checkout** instead. All commands below run from the folder containing `app.py`, `compose.yml` and `scripts/lab.sh`. Do not start a second Compose stack from another clone on the same ports.
 
-**Already have a checkout but it is on an old branch?** Use a separate directory for the latest `main`; this does not overwrite your original checkout:
-
-```bash
-SOURCE="$HOME/projects/ci-cd-lab-ci-cd-platform"
-git -C "$SOURCE" fetch origin main
-NEW="$HOME/projects/ci-cd-lab-learning-$(date +%Y%m%d-%H%M%S)"
-git -C "$SOURCE" worktree add --detach "$NEW" origin/main
-cd "$NEW"
-ls app.py compose.yml scripts/lab.sh
-```
-
-**Important:** Stay in this **same repo directory** in both terminals below. Running a second Compose project from another checkout may collide on ports. Avoid copying the contents of a `.py` file into Bash: execute scripts with `bash` or `python3` as shown.
-
-### Step 1 — Start the dashboard (terminal A)
-
-From the repository root:
+**Terminal A — launch the dashboard (leave running)**
 
 ```bash
 bash scripts/lab.sh start
 ```
 
-The helper checks Python, prepares `.venv`, installs dependencies, creates **private viewer/operator tokens**, uses a local SQLite database, and starts FastAPI. On later runs it reuses the same private files instead of overwriting them. **Leave this terminal running** and open:
-
-**<http://127.0.0.1:18001/dashboard>**
-
-It prints the location of token files without printing the tokens themselves. To locate them again, open a **second terminal in the same repository** and run:
+Open **http://127.0.0.1:18001/dashboard**. To find your private login token, open Terminal B and run:
 
 ```bash
 bash scripts/lab.sh tokens
 ```
 
-Read `viewer.token` locally using the `cat` command printed by the helper. Paste the token into the dashboard and click **Unlock** (not just Paste). A viewer can read data; an `operator.token` can also perform authorized API writes. **Never commit, screenshot or share a token.** Tokens expire after 30 days by default. A `401` request before you unlock is expected.
+Read the `viewer.token` file using the printed command, paste its value into **Unlock**, and click **Unlock**. `viewer` can inspect; `operator` can also write incidents. **Never share or commit tokens.** The browser's Deploy buttons are intentionally disabled in safe local mode.
 
-Once unlocked, the dashboard may initially say the demo service is **down** — this is normal until the next step. **Deploy buttons are deliberately disabled in this safe first-time setup.** You will use the interactive terminal demo below; enabling server-side Docker execution requires a separate privileged configuration.
-
-### Step 2 — Start the Blue/Green demo (terminal B)
-
-With Docker Engine running, from the **same repository root**:
+**Terminal B — start the Docker demo**
 
 ```bash
+sudo -v
 bash scripts/lab.sh demo
 bash scripts/lab.sh status
 ```
 
-This creates/starts four containers: PostgreSQL, blue, green, and Nginx. It may build/recreate demo containers; it **does not remove volumes**. The script checks **ports 5432, 8001, 8002 and 8080 before starting** and stops if another service owns one. It will not silently stop old containers to make room.
+Visit **http://127.0.0.1:8080/version** to see the release actually served by Nginx. The demo uses four containers: `db`, `demo-blue`, `demo-green`, and `nginx`.
 
-The demo's public endpoint is **<http://127.0.0.1:8080/version>**. Nginx initially routes traffic to **blue**; green is the spare slot. Refresh the dashboard to see health and the active service version. The dashboard monitors Nginx on port `8080`, not a hard-coded blue-only address.
+## 3. Try a real deployment and rollback
 
-> **Database clarification:** the dashboard launched in Step 1 uses a **private SQLite database**. The Compose `db` container is present for the wider lab but is **not** automatically connected to that local dashboard. The Kubernetes installation uses PostgreSQL separately.
-
-### Step 3 — Run your first release drill (terminal B)
-
-Follow this **exact order** so a healthy rollback target remains available:
+Run these **one at a time in Terminal B**:
 
 ```bash
-# A: Try a broken candidate on the inactive slot.
-bash scripts/lab.sh deploy broken v2.0.0 broken001
+# 1. Intentionally broken: fails readiness; live traffic must stay unchanged.
+bash scripts/lab.sh deploy broken v2.0.0 demo-bad
 
-# B: Deploy a healthy candidate to the same inactive slot.
-bash scripts/lab.sh deploy healthy v2.0.1 healthy001
+# 2. Healthy: validates the inactive slot, then switches live traffic.
+bash scripts/lab.sh deploy healthy v2.0.1 demo-good
 
-# C: Switch traffic back to the previously healthy slot.
+# 3. Roll back to the previous healthy release.
 bash scripts/lab.sh rollback
 
-# D: Inspect the current release and readiness.
+# 4. Confirm what is live now.
 bash scripts/lab.sh status
+curl -fsS http://127.0.0.1:8080/version
 ```
 
-**What should happen?**
+**Expected:** Step 1 reports an error **on purpose**, with no traffic switch; step 2 deploys successfully; step 3 restores the earlier release. Keep the dashboard running to view the **Guided Local Lab** activity and deployment history. A rollback changes the local Nginx route, **not the Kubernetes cluster or database contents**.
 
-1. **Broken candidate:** Docker starts the inactive slot in broken mode; `/ready` never passes, so the deploy command **fails on purpose** and Nginx continues serving the original blue slot. An error/exit code in this first command is **expected**.
-2. **Healthy candidate:** The helper targets the inactive slot again, checks `/ready`, checks its `/version` against the requested version/SHA, validates Nginx config, switches traffic and verifies the live endpoint. Your dashboard's **Deployment History** can record this action.
-3. **Rollback:** The script checks the other slot's readiness and release identity, switches Nginx back and verifies the result. It does **not** restore the database or roll back Kubernetes.
+## 4. What happens behind the scenes?
 
-**Why broken comes first:** a broken deploy recreates its target slot. If you deploy healthy, then overwrite the *previous healthy slot* with a broken candidate, you lose the easy rollback target. This walkthrough preserves it by running the broken test first.
+| Step | What the system does | Why it matters |
+| --- | --- | --- |
+| **Build** | CI runs tests and security checks | Bad changes are blocked before release |
+| **Publish** | CD scans and verifies an image, then publishes it to GHCR | Releases are traceable by SHA-256 digest |
+| **Deploy (local)** | Recreates only the *inactive* Blue/Green container | The live slot keeps serving requests |
+| **Verify + switch** | Checks `/ready` and `/version`, validates Nginx, then switches traffic | Users receive only the validated candidate |
+| **Rollback** | Checks the previous healthy slot and restores its route | Fast recovery without rebuilding |
+| **GitOps** | A reviewed manifest change tells Argo CD which digest to run | Kubernetes state is controlled through Git |
 
-The CLI is intentionally separate from the web Deployment Control buttons. The CLI uses interactive `sudo docker compose`; it can ask for your local sudo password. In contrast, a web-server background task has **no terminal to ask for sudo credentials**, so the safe starter does not pretend those buttons work. The local CLI writes Deployment History through an authenticated API callback when the dashboard is running. After **Unlock**, the prominent **Guided Local Lab** card shows the actual configured routing slot, Nginx's live release version and the most recent CLI outcomes (refreshed every five seconds). The card also reads structured `OPSBOARD_STEP` markers from a private local activity file, so it shows **actual CLI execution steps while the command is running** without executing Docker from the web process. The separate **Operation Timeline** is only for operations queued via the browser API. The dashboard buttons remain disabled in safe terminal mode.
+**To ship a new release:** open a pull request, wait for all seven CI jobs to pass, then merge to `main`. CD builds, scans and publishes the verified image to GHCR. **To run it on Kubernetes**, update the verified `image`, `APP_VERSION` and `GIT_SHA` together in a separate reviewed PR to `k8s/opsboard/app.yaml`; Argo CD syncs it. Kubernetes rollback uses a GitOps revert, **not** `lab.sh rollback`.
 
-**Important safety guard:** `deploy`, `rollback`, and `demo` now refuse to operate on containers that Docker Compose associates with a **different checkout directory**, even if both clones happen to use the same Compose project name. This prevents silent changes to another lab. If you see this warning, use the directory shown as the owner or intentionally stop that old Compose stack before starting from a new directory. The script will not stop or delete anything automatically.
+## 5. Useful commands
 
-### Step 4 — Explore the API and incidents (optional)
-
-Open **<http://127.0.0.1:18001/docs>** for the FastAPI Swagger UI. Use **Authorize** with your locally generated `operator.token` to call the protected API. Try:
-
-- `GET /api/auth/me` — which role am I using?
-- `GET /api/dashboard` — what state does the browser display?
-- `POST /api/incidents` — add a practice incident with `{"service":"demo-api","severity":"warning","reason":"Learning the incident lifecycle"}`.
-- `GET /api/incidents` — find the new record's ID; `POST /api/incidents/{incident_id}/resolve` — mark it resolved.
-
-Refresh the dashboard and watch the incident count/status change. The request travels through **Bearer authentication → FastAPI route → SQLAlchemy → SQLite → dashboard refresh**. The API docs may load Swagger assets from a CDN.
-
-### When you are done
-
-Press **Ctrl+C** in terminal A to stop only the local FastAPI process. Demo containers continue running until you deliberately stop them. To stop **only the containers belonging to this checkout's Compose project**, inspect the project first and then, if you intend to stop them, run `sudo docker compose stop` from the same repository root. `stop` preserves named volumes; do **not** run `down -v` unless you explicitly intend to delete demo data.
-
-## Troubleshooting (the problems most beginners hit)
-
-| You see | What it means / what to do |
+| Task | Command |
 | --- | --- |
-| `scripts/lab.sh: No such file` | You are in an old checkout or wrong folder. Return to **Step 0** and verify the file exists. |
-| `python3.14: command not found` | Install Python 3.14 and its `venv` support for your Linux distribution; do not silently use an older interpreter. |
-| Dashboard starts but `/ready` is `503` | Authentication or SQLite is not configured correctly. Use `bash scripts/lab.sh start` and preserve the private credential directory for inspection. |
-| Pasting a token appears to do nothing | Click **Unlock** and watch the status beside the form. `viewer` is read-only; the dashboard's Deploy buttons stay disabled by design in safe mode. |
-| `permission denied ... /var/run/docker.sock` | Docker on Linux needs permission. The lab helper uses `sudo docker`; Docker access is effectively root-level, so don't add users to privileged groups casually. |
-| `Bind for 127.0.0.1:8001 failed: port is already allocated` | A container/process from another checkout already uses the port. Run `sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'` and `sudo ss -lntp` to identify it. **Do not automatically delete or stop it.** |
-| `curl ...:8080/version` works but Docker Compose failed | You may be contacting a **different old stack**. Trust the Compose command's exit status and inspect container names, not the curl response alone. |
-| Dashboard shows service down, although the dashboard is open | `18001` is the control UI; `8080` is the separate Nginx demo. Start the demo in terminal B and refresh the UI. |
-| Broken deployment reports failure | **Expected:** the readiness gate rejected the candidate and did not switch Nginx. |
-| Rollback fails | Check the other slot with `/ready` first. Rollback is blocked when the target is unhealthy; do not force traffic to it. |
+| Open dashboard | `http://127.0.0.1:18001/dashboard` |
+| Check local services | `bash scripts/lab.sh status` |
+| Find token files | `bash scripts/lab.sh tokens` |
+| Check dashboard readiness | `curl -fsS http://127.0.0.1:18001/ready` |
+| See the live demo version | `curl -fsS http://127.0.0.1:8080/version` |
+| View demo containers | `sudo docker compose ps` |
+| Test local Nginx routing | `python3 scripts/nginx_route.py check` |
+| Run automated Python tests | `.venv/bin/python -m pytest -q` |
+| Stop the dashboard | `Ctrl+C` in Terminal A |
 
-Read-only checks from the repository root:
+**Where data lives:** local dashboard history uses private **SQLite**; the Compose `db` container is a separate demo PostgreSQL instance; Kubernetes uses its **own PostgreSQL + PVC**. None of these databases is an automatic backup of the others.
 
-```bash
-bash scripts/lab.sh status
-sudo docker compose ps
-curl -i --max-time 5 http://127.0.0.1:18001/ready
-curl -i --max-time 5 http://127.0.0.1:8080/version
-```
+## 6. Troubleshooting & safety
 
-## How the application works behind the scenes
+| Symptom | Fix |
+| --- | --- |
+| Dashboard unavailable on `:18001` | Run `bash scripts/lab.sh start` and keep that terminal open |
+| Demo unavailable on `:8080` | Check `bash scripts/lab.sh status` and `sudo docker compose ps` |
+| Docker permission error | Run `sudo -v` in the **same terminal**, then retry |
+| Broken deploy exits with an error | **Expected.** Confirm the live version did not change |
+| Port conflict / another checkout owns containers | Inspect `sudo docker ps`; do not stop or overwrite an unknown stack |
+| Rollback blocked | Previous slot is not ready; investigate before switching traffic |
 
-### Local deployment flow
+**Safe defaults:** credentials stay outside Git, web-triggered Docker deployment is disabled, and scripts should never need `docker compose down -v`. Docker access is privileged; use this lab only on trusted local machines. To stop the demo without deleting its volumes, run `sudo docker compose stop` **only from the checkout that owns its containers**.
 
-1. **Browser + token:** `static/dashboard.js` sends Bearer-authorized requests to protected `/api/*` routes in `app.py`. The token is checked against hashes/expiry in `OPSBOARD_AUTH_FILE`; a viewer cannot write.
-2. **State:** `opsboard/models.py`, `opsboard/database.py` and SQLAlchemy store incidents, deployments and queued operations. In this beginner walkthrough, that database is local SQLite, not the Compose PostgreSQL container.
-3. **Monitoring:** `opsboard/monitor.py` probes the *active Nginx service* through `/health`, `/ready`, `/probe` and `/version`. A service can respond to `/health` but still fail `/ready`.
-4. **Safe deployment:** `scripts/deploy.sh` identifies the inactive blue/green slot in `nginx/active_backend.inc`, recreates only that demo container, waits for readiness, compares release identity, validates/reloads Nginx and verifies production traffic.
-5. **Recovery:** `scripts/rollback.sh` switches Nginx to the other *ready* slot and verifies that version. This is a learning-grade local rollback, **not** a transactional disaster-recovery guarantee.
-6. **Operations API:** When explicitly enabled in a properly privileged, trusted lab, `/api/operations/*` queues an operation and a background runner captures its steps. This is deliberately disabled by the beginner launcher because browser-triggered Docker/sudo execution requires a reviewed privilege setup.
+## 7. Repository guide & verified release
 
-### CI → CD → GitOps: the second environment
+| Path | Purpose |
+| --- | --- |
+| `app.py`, `opsboard/` | API, authentication, monitoring, database and operations |
+| `templates/`, `static/` | Dashboard UI |
+| `scripts/lab.sh`, `scripts/deploy.sh`, `scripts/rollback.sh` | Local lab and Blue/Green controls |
+| `.github/workflows/` | CI/CD pipelines |
+| `compose.yml`, `Dockerfile*` | Local services and container images |
+| `k8s/` | Kubernetes manifests and Argo CD |
+| `tests/`, `docs/` | Tests and deeper technical guides |
 
-1. **Pull request:** GitHub Actions CI runs seven checks: Python tests; code quality; secrets; dependency security; container security; isolated API attack scan; API/browser security.
-2. **Push to `main`:** Only after successful CI, CD builds the application image, publishes it under a source-commit tag to GHCR, generates **SBOM/provenance**, applies the **Trivy gate**, and tests the published image by immutable SHA-256 digest. The verified candidate may also receive the mutable `latest` tag.
-3. **Promotion is separate:** A reviewed GitOps PR updates **three matching fields** in `k8s/opsboard/app.yaml`: `image` digest, `APP_VERSION` and full `GIT_SHA`. A green CD does **not** mean that Kubernetes is already running that image.
-4. **Argo CD:** Watches `main:k8s/opsboard` and reconciles the Kind cluster to the committed manifests. The Kubernetes OpsBoard Pod uses PostgreSQL with a PVC; the running image is pinned by digest.
-5. **Verification/rollback:** Check Argo `Synced/Healthy`, Pod readiness, the *running image digest*, API `/ready` + `/version`, and PostgreSQL PVC identity. For rollback, restore the **previous verified image and matching version metadata in a GitOps PR**, not `kubectl set image`.
+**[Release v1.0.0](https://github.com/Mishkaaass/ci-cd-lab/releases/tag/v1.0.0)** · validated on **10 Nov 2026**: CI **7/7**, CD **passed**, final audits **20/20**, deployment drill **14/14** (broken rejected → healthy promoted → rollback restored), and Argo CD **Synced / Healthy**. The PostgreSQL PVC was preserved during the verified lab run.
 
-**Important distinction:** the Git commit that updates the GitOps manifest can be newer than the application image's `git_sha`. That is expected: a release is promoted **after** it was built and verified.
-
-## Repository map
-
-```text
-app.py                       FastAPI routes and dashboard
-opsboard/                    Authentication, DB models, monitoring, incidents, operations
-static/ and templates/       Browser dashboard
-scripts/lab.sh               Beginner-safe local lab entry point (this guide)
-scripts/deploy.sh             Local blue/green release with readiness checks
-scripts/rollback.sh           Local Nginx traffic rollback
-compose.yml                  PostgreSQL + two demo services + Nginx (NOT dashboard)
-Dockerfile / Dockerfile.demo  Application image / small demo image
-.github/workflows/           CI and CD (GitHub Actions)
-k8s/                         Kubernetes manifests and Argo CD app
-tests/                       Functional, deployment and security regressions
-docs/                        Security, GitOps and operational reference guides
-```
-
-## Advanced docs, safety and project scope
-
-- [Kubernetes and GitOps setup](docs/kubernetes-gitops.md)
-- [Release checklist](docs/release-checklist.md)
-- [Security testing lab](docs/security-lab.md)
-- [Container vulnerability policy](docs/container-security-policy.md)
-
-**Security policy:** The Trivy gate blocks **all CRITICAL** findings and **fixable HIGH** findings. Unfixed HIGH findings are reported but currently allowed in this learning lab; a green pipeline is not a clean-image guarantee. The Compose PostgreSQL password is for **local development only**; never expose this stack publicly or reuse those credentials. Tokens are generated outside the repo and are not stored in plain text in the application's auth file. Docker/sudo permissions are powerful.
-
-**Scope:** This repository demonstrates a working local CI/CD/GitOps lab. It does **not** promise internet-facing security, OIDC/MFA, managed TLS, multi-cluster HA, backup/restore, fully automatic GitOps promotions or flawless rollback after arbitrary machine failures. A PVC surviving Pod replacement is not the same as a verified backup. For a public production system, review the remaining limitations before using any part of this design.
-
-**Project evidence:** The lab previously passed CI **7/7** on PR and `main`, CD release gates, Argo CD `Synced/Healthy`, a running digest-verified Kubernetes Pod, and `/health`, `/ready`, `/version` checks. This README and helper must pass their own PR CI before being treated as part of the verified `main` revision.
+For deeper details: [GitOps setup](docs/kubernetes-gitops.md) · [Release checklist](docs/release-checklist.md) · [Security lab](docs/security-lab.md) · [Container security policy](docs/container-security-policy.md).
