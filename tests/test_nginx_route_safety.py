@@ -136,3 +136,19 @@ def test_validate_uses_bounded_read_only_nginx_test(mock_lab):
     nginx_route.route_command("validate")
     assert route.read_text() == "server demo-green:8000;\n"
     assert state["exec_calls"] == [("-t",)]
+
+
+def test_bounded_subprocess_preserves_sudo_tty_session():
+    output = nginx_route.subprocess_bounded(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import os; "
+                "print(int(os.getsid(0) == os.getsid(os.getppid()))); "
+                "print(int(os.getpgrp() != os.getpgid(os.getppid())))"
+            ),
+        ],
+        timeout=4,
+    )
+    assert output.splitlines() == ["1", "1"]

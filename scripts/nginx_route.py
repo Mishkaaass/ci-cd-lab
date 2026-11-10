@@ -114,7 +114,9 @@ def subprocess_bounded(args: list[str], timeout: int = DOCKER_TIMEOUT_SECONDS) -
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        start_new_session=True,
+        # Keep the terminal session for cached sudo authentication.
+        # Isolate the process group for timeout cleanup.
+        process_group=0,
     )
     try:
         stdout, _ = process.communicate(timeout=timeout)
