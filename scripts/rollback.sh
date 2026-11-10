@@ -39,6 +39,10 @@ CURRENT=$(
 )
 
 
+# Do not toggle traffic using a stale routing file.
+python3 scripts/nginx_route.py check
+
+
 case "$CURRENT" in
 
     blue)
@@ -88,6 +92,7 @@ echo "[1/4] Checking rollback target readiness..."
 if ! curl \
     --fail \
     --silent \
+    --max-time 4 \
     "http://127.0.0.1:${PORT}/ready" \
     >/dev/null
 then
@@ -107,6 +112,7 @@ if ! VERSION_JSON=$(
     curl \
         --fail \
         --silent \
+        --max-time 4 \
         "http://127.0.0.1:${PORT}/version"
 )
 then
@@ -164,38 +170,12 @@ emit_step \
 
 
 echo
-echo "[2/4] Preparing traffic switch..."
+echo "[2/4] Validating and switching Nginx (bounded, reversible)..."
 
-printf \
-    'server %s:8000;\n' \
-    "$SERVICE" \
-    > "$NGINX_CONFIG"
-
-
-echo
-echo "[3/4] Validating and reloading Nginx..."
-
-if ! sudo docker compose exec -T nginx nginx -t; then
-    emit_step \
-        "failed" \
-        "Traffic switched"
-
+if ! python3 scripts/nginx_route.py switch "$TARGET"; then
+    emit_step "failed" "Traffic switched"
     exit 1
 fi
-
-
-if ! sudo docker compose exec -T nginx nginx -s reload; then
-    emit_step \
-        "failed" \
-        "Traffic switched"
-
-    exit 1
-fi
-
-
-emit_step \
-    "success" \
-    "Traffic switched"
 
 
 emit_step \
@@ -220,6 +200,9 @@ then
 
     echo
     echo "ROLLBACK VERIFICATION FAILED"
+    echo "Restoring original production slot: $CURRENT"
+    python3 scripts/nginx_route.py switch "$CURRENT" || \
+        echo "CRITICAL: production recovery could not be verified" >&2
 
     exit 1
 fi
@@ -237,6 +220,7 @@ DURATION_MS=$((END_MS - START_MS))
 if curl \
     --fail \
     --silent \
+    --max-time 4 \
     "$OPSBOARD_URL/health" \
     >/dev/null 2>&1
 then

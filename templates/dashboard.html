@@ -7,7 +7,8 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>OpsBoard</title>
+    <title>OpsBoard — Release Operations</title>
+    <meta name="theme-color" content="#101b26">
 
     <link
         rel="stylesheet"
@@ -21,37 +22,54 @@
 </head>
 
 <body>
+<div class="workspace">
+    <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#overview" aria-label="OpsBoard, back to overview">
+            <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+            <span class="brand-copy"><strong>OPSBOARD</strong><small>PLATFORM CONSOLE</small></span>
+        </a>
 
-<div class="shell">
+        <div class="sidebar-group-label">WORKSPACE</div>
+        <nav class="primary-nav" aria-label="Sections">
+            <a class="nav-link nav-link-active" href="#overview"><span class="nav-icon" aria-hidden="true">◫</span><span>Overview</span></a>
+            {% if environment != "kubernetes" %}
+            <a class="nav-link" href="#release-lab"><span class="nav-icon" aria-hidden="true">⌁</span><span>Release lab</span></a>
+            {% endif %}
+            <a class="nav-link" href="#deployments"><span class="nav-icon" aria-hidden="true">⇄</span><span>Deployments</span></a>
+            <a class="nav-link" href="#operations"><span class="nav-icon" aria-hidden="true">≡</span><span>Operations</span></a>
+            <a class="nav-link" href="#activity"><span class="nav-icon" aria-hidden="true">▤</span><span>Activity log</span></a>
+            <a class="nav-link" href="#incidents"><span class="nav-icon" aria-hidden="true">◇</span><span>Incidents</span></a>
+        </nav>
 
-    <header class="topbar">
-
-        <div>
-            <p class="eyebrow">
-                PRODUCTION CONTROL
-            </p>
-
-            <h1>OpsBoard</h1>
-
-            <p class="subtitle">
-                Deployment, service health and incident visibility
-            </p>
+        <div class="sidebar-bottom">
+            <div class="sidebar-edition"><span class="sidebar-edition-dot"></span> LOCAL-FIRST LAB</div>
+            <p>Secure release visibility<br>without privileged browser actions.</p>
+            <div class="sidebar-footnote">OPSB / CONSOLE 01</div>
         </div>
+    </aside>
 
-        <div class="environment">
-            <span class="pulse"></span>
-            {{ environment | upper }}
-        </div>
-
-    </header>
+    <main class="shell" id="main-content">
+        <header class="topbar">
+            <div class="title-block">
+                <p class="eyebrow"><span class="breadcrumb">Workspace</span><span class="breadcrumb-divider">/</span> Operations</p>
+                <h1>Release operations<span class="title-period">.</span></h1>
+                <p class="subtitle">Live service health, deployments and operational activity.</p>
+            </div>
+            <div class="topbar-actions">
+                <span class="connection-badge" id="workspace-connection" data-state="locked"><span class="connection-dot"></span><span id="workspace-connection-label">Locked session</span></span>
+                <span class="environment"><span class="environment-dot"></span>{{ environment | upper }}</span>
+            </div>
+        </header>
 
     <section class="card auth-card">
-        <h2>Dashboard access</h2>
-        <p>Use your personal viewer or operator token. Refreshing or locking the page clears access.</p>
+        <div class="auth-intro"><div class="auth-symbol" aria-hidden="true">✳</div>
+            <div><p class="card-label">SECURE SESSION</p><h2>Unlock operational data</h2>
+            <p>Paste your local viewer or operator token. Credentials stay in this session.</p></div>
+        </div>
         <form id="auth-form" class="deployment-form">
             <label class="form-field">
                 <span>ACCESS TOKEN</span>
-                <input id="access-token" type="password" autocomplete="off" maxlength="256" required>
+                <input id="access-token" type="password" autocomplete="off" maxlength="256" required placeholder="Local access token" aria-label="Local access token">
             </label>
             <button class="button" type="submit">Unlock</button>
             <button id="lock-button" class="button button-secondary" type="button">Lock</button>
@@ -60,59 +78,12 @@
     </section>
 
 
-    {% if environment != "kubernetes" %}
-    <section class="card lab-guide" aria-labelledby="lab-guide-title">
-        <div class="card-header">
-            <div>
-                <p class="card-label">LOCAL LAB / GUIDED WALKTHROUGH</p>
-                <h2 id="lab-guide-title">See a release fail, succeed, then roll back</h2>
-            </div>
-            <span class="safe-badge">TERMINAL-CONTROLLED</span>
-        </div>
-        <p class="control-description">
-            Use the commands below in a second terminal in the same checkout.
-            This page observes the actual Nginx version and records CLI results
-            automatically; the web server is not given root-level Docker access.
-        </p>
-        <div class="lab-stats" aria-label="Local release state">
-            <div><span>CONFIGURED ROUTE</span><strong id="lab-active-slot">Unlock to inspect</strong></div>
-            <div><span>LIVE RELEASE</span><strong id="lab-live-version">—</strong></div>
-            <div><span>LAST CLI RESULT</span><strong id="lab-latest-result">—</strong></div>
-        </div>
-        <div class="lab-guided-steps">
-            <div class="lab-step-guide">
-                <strong>1. Rejected candidate</strong>
-                <code>bash scripts/lab.sh deploy broken v2.0.0 broken001</code>
-                <p>Expected failure: readiness never passes; active traffic stays on its prior version.</p>
-            </div>
-            <div class="lab-step-guide">
-                <strong>2. Verified promotion</strong>
-                <code>bash scripts/lab.sh deploy healthy v2.0.1 healthy001</code>
-                <p>Checks readiness and release identity before reloading Nginx.</p>
-            </div>
-            <div class="lab-step-guide">
-                <strong>3. Verified rollback</strong>
-                <code>bash scripts/lab.sh rollback</code>
-                <p>Routes traffic back only after the previous slot passes readiness.</p>
-            </div>
-        </div>
-        <div class="lab-events-header">
-            <strong>Live CLI execution steps (latest run)</strong>
-            <span id="lab-cli-state">No CLI operation recorded</span>
-        </div>
-        <div id="lab-cli-timeline" class="lab-cli-timeline">
-            <p class="empty">Execute a terminal lab command to stream its steps here.</p>
-        </div>
-        <div class="lab-events-header">
-            <strong>Actual CLI release history</strong>
-            <span>Updates every 5 seconds after Unlock</span>
-        </div>
-        <div id="lab-events" class="lab-events" aria-live="polite">
-            <p class="empty">Unlock the dashboard to view recorded lab activity.</p>
-        </div>
-    </section>
-    {% endif %}
 
+
+    <div class="section-heading" id="overview">
+        <div><p class="section-kicker">01 / SYSTEM STATUS</p><h2>Production overview</h2></div>
+        <span class="section-meta">LIVE SERVICE SNAPSHOT</span>
+    </div>
     <section class="overview-grid">
 
         <article class="card service-card">
@@ -287,6 +258,67 @@
     </section>
 
 
+    {% if environment != "kubernetes" %}
+    <div class="section-heading" id="release-lab-anchor">
+        <div><p class="section-kicker">02 / GUIDED RELEASE</p><h2>Guided Local Lab</h2></div>
+        <span class="section-meta">SAFE LOCAL MODE</span>
+    </div>
+    <section class="card lab-guide" id="release-lab" aria-labelledby="lab-guide-title">
+        <div class="card-header">
+            <div>
+                <p class="card-label">RELEASE WORKFLOW / TERMINAL MODE</p>
+                <h2 id="lab-guide-title">From failed candidate to safe rollback</h2>
+            </div>
+            <span class="safe-badge">READ ONLY / TERMINAL DRIVEN</span>
+        </div>
+        <p class="control-description">
+            Use the commands below in a second terminal in the same checkout.
+            This page observes the actual Nginx version and records CLI results
+            automatically; the web server is not given root-level Docker access.
+        </p>
+        <div class="lab-stats" aria-label="Local release state">
+            <div><span>CONFIGURED ROUTE</span><strong id="lab-active-slot">Unlock to inspect</strong></div>
+            <div><span>LIVE RELEASE</span><strong id="lab-live-version">—</strong></div>
+            <div><span>LAST CLI RESULT</span><strong id="lab-latest-result">—</strong></div>
+        </div>
+        <div class="lab-guided-steps">
+            <div class="lab-step-guide">
+                <strong>1. Rejected candidate</strong>
+                <code>bash scripts/lab.sh deploy broken v2.0.0 broken001</code>
+                <p>Expected failure: readiness never passes; active traffic stays on its prior version.</p>
+            </div>
+            <div class="lab-step-guide">
+                <strong>2. Verified promotion</strong>
+                <code>bash scripts/lab.sh deploy healthy v2.0.1 healthy001</code>
+                <p>Checks readiness and release identity before reloading Nginx.</p>
+            </div>
+            <div class="lab-step-guide">
+                <strong>3. Verified rollback</strong>
+                <code>bash scripts/lab.sh rollback</code>
+                <p>Routes traffic back only after the previous slot passes readiness.</p>
+            </div>
+        </div>
+        <div class="lab-events-header">
+            <strong>Live execution trace</strong>
+            <span id="lab-cli-state">No CLI operation recorded</span>
+        </div>
+        <div id="lab-cli-timeline" class="lab-cli-timeline">
+            <p class="empty">Execute a terminal lab command to stream its steps here.</p>
+        </div>
+        <div class="lab-events-header">
+            <strong>Actual CLI release history</strong>
+            <span>Auto-refresh after unlock</span>
+        </div>
+        <div id="lab-events" class="lab-events" aria-live="polite">
+            <p class="empty">Unlock the dashboard to view recorded lab activity.</p>
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="section-heading" id="deployments">
+        <div><p class="section-kicker">03 / DEPLOYMENT CONTROL</p><h2>Release management</h2></div>
+        <span class="section-meta">BLUE / GREEN</span>
+    </div>
     <section class="control-grid">
 
         <article class="card control-card">
@@ -500,6 +532,10 @@
     </section>
 
 
+    <div class="section-heading" id="operations">
+        <div><p class="section-kicker">04 / ACTIVITY</p><h2>Operations timeline</h2></div>
+        <span class="section-meta">API REQUESTS &amp; RESULTS</span>
+    </div>
     <section class="operation-grid">
 
         <article class="card operation-card">
@@ -701,6 +737,10 @@
     </section>
 
 
+    <div class="section-heading" id="activity">
+        <div><p class="section-kicker">05 / AUDIT TRAIL</p><h2>Historical records</h2></div>
+        <span class="section-meta">RECENT EVENTS</span>
+    </div>
     <section class="table-grid">
 
         <article class="card">
@@ -771,13 +811,13 @@
         </article>
 
 
-        <article class="card">
+        <article class="card" id="incidents">
 
             <div class="card-header">
 
                 <div>
                     <p class="card-label">
-                        OPERATIONS
+                        INCIDENTS
                     </p>
 
                     <h2>
@@ -833,16 +873,12 @@
 
     <footer>
 
-        <span>
-            Live API polling enabled
-        </span>
-
-        <span>
-            Real operation state — no fake progress
-        </span>
+        <span>OPSBOARD / RELEASE OPERATIONS</span>
+        <span>Real service telemetry. No simulated progress.</span>
 
     </footer>
 
+    </main>
 </div>
 
 </body>

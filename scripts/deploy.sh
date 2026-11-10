@@ -69,6 +69,10 @@ if [[ -z "$ACTIVE_SERVICE" ]]; then
 fi
 
 
+# Stop before candidate replacement if disk config and live Nginx disagree.
+python3 scripts/nginx_route.py check
+
+
 if [[ "$ACTIVE_SERVICE" == "$TARGET" ]]; then
     echo "ERROR: $TARGET is currently serving production."
     echo "Deployments are only allowed to the inactive slot."
@@ -103,6 +107,7 @@ record_deployment() {
     if ! curl \
         --fail \
         --silent \
+        --max-time 4 \
         "$OPSBOARD_URL/health" \
         >/dev/null 2>&1
     then
@@ -158,14 +163,7 @@ record_failure() {
 restore_previous_backend() {
     echo
     echo "Restoring previous backend: $ACTIVE_SERVICE"
-
-    printf \
-        'server demo-%s:8000;\n' \
-        "$ACTIVE_SERVICE" \
-        > "$NGINX_CONFIG"
-
-    sudo docker compose exec -T nginx nginx -t
-    sudo docker compose exec -T nginx nginx -s reload
+    python3 scripts/nginx_route.py switch "$ACTIVE_SERVICE"
 }
 
 
@@ -210,7 +208,7 @@ emit_step \
 
 if [[ "$TARGET" == "blue" ]]; then
 
-    if ! sudo env \
+    if ! sudo -n timeout -k 5s 90s env \
         BLUE_MODE="$MODE" \
         BLUE_VERSION="$VERSION" \
         BLUE_SHA="$GIT_SHA" \
@@ -231,7 +229,7 @@ if [[ "$TARGET" == "blue" ]]; then
 
 else
 
-    if ! sudo env \
+    if ! sudo -n timeout -k 5s 90s env \
         GREEN_MODE="$MODE" \
         GREEN_VERSION="$VERSION" \
         GREEN_SHA="$GIT_SHA" \
@@ -273,6 +271,7 @@ for attempt in {1..15}; do
     if curl \
         --fail \
         --silent \
+        --max-time 4 \
         "http://127.0.0.1:${PORT}/ready" \
         >/dev/null 2>&1
     then
@@ -327,6 +326,7 @@ if ! CANDIDATE_JSON=$(
     curl \
         --fail \
         --silent \
+        --max-time 4 \
         "http://127.0.0.1:${PORT}/version"
 )
 then
@@ -408,68 +408,14 @@ emit_step \
 
 
 echo
-echo "[3/5] Preparing traffic switch..."
+echo "[3/5] Validating Nginx and switching traffic (bounded, reversible)..."
 
-
-emit_step \
-    "running" \
-    "Nginx configuration validated"
-
-
-printf \
-    'server %s:8000;\n' \
-    "$SERVICE" \
-    > "$NGINX_CONFIG"
-
-
-echo
-echo "[4/5] Validating and reloading Nginx..."
-
-if ! sudo docker compose exec -T nginx nginx -t; then
-
-    emit_step \
-        "failed" \
-        "Nginx configuration validated"
-
-    echo
-    echo "Nginx configuration validation failed."
-
-    restore_previous_backend
+if ! python3 scripts/nginx_route.py switch "$TARGET"; then
     record_failure
-
     exit 1
 fi
 
 
-emit_step \
-    "success" \
-    "Nginx configuration validated"
-
-
-emit_step \
-    "running" \
-    "Traffic switched"
-
-
-if ! sudo docker compose exec -T nginx nginx -s reload; then
-
-    emit_step \
-        "failed" \
-        "Traffic switched"
-
-    restore_previous_backend
-    record_failure
-
-    exit 1
-fi
-
-
-emit_step \
-    "success" \
-    "Traffic switched"
-
-
-echo
 echo "[5/5] Waiting for production convergence..."
 
 emit_step \

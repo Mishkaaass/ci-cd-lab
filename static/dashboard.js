@@ -715,6 +715,8 @@ document.addEventListener(
     () => {
         connectActions();
         connectAuthentication();
+        connectNavigation();
+        setSessionIndicator(false);
         setControlsDisabled(true);
         refreshOperations();
         refreshDashboard();
@@ -807,6 +809,26 @@ function renderRecords(deployments, incidents, activeCount) {
     }
 }
 
+// View-only console chrome. Authentication remains handled by the existing API.
+function setSessionIndicator(ready, role = "") {
+    const indicator = byId("workspace-connection");
+    if (indicator) indicator.dataset.state = ready ? "ready" : "locked";
+    setText("workspace-connection-label", ready
+        ? `Connected · ${String(role).toUpperCase()}`
+        : "Locked session");
+}
+
+function connectNavigation() {
+    const links = [...document.querySelectorAll(".primary-nav .nav-link")];
+    for (const link of links) {
+        link.addEventListener("click", () => {
+            for (const item of links) {
+                item.classList.toggle("nav-link-active", item === link);
+            }
+        });
+    }
+}
+
 function checkExpiry() {
     if (accessToken && Date.now() >= accessExpiresAt) {
         lockDashboard("Access expired. Unlock again.");
@@ -840,6 +862,7 @@ function lockDashboard(message = "Locked — operational data requires authentic
     }
     setControlsDisabled(true);
     setText("auth-status", message);
+    setSessionIndicator(false);
     setFeedback("Unlock with an operator token to use deployment controls.");
     updateServiceStatus({name: "demo-api", status: "unknown", ready: false,
         latency_ms: null, version: "—", git_sha: "—"});
@@ -888,6 +911,7 @@ function connectAuthentication() {
             scheduleExpiry();
             canExecuteOperations = actor.deployment_actions_enabled;
             setText("auth-status", `${actor.name} — ${actor.role}`);
+            setSessionIndicator(true, actor.role);
             setFeedback(canExecuteOperations ? "Operator access enabled." :
                 "Read access enabled. Use terminal commands for this safe local lab.");
             setText("control-mode-hint", canExecuteOperations
