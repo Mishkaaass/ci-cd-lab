@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import http.client
 import json
 import os
 import signal
@@ -19,8 +20,6 @@ import stat
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,13 +38,21 @@ def emit_step(status: str, name: str) -> None:
 
 
 def get_json(port: int, path: str = "/version") -> dict:
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}{path}", headers={"Cache-Control": "no-store"}
-    )
-    with urllib.request.urlopen(request, timeout=3) as response:
+    if port not in PORTS.values() and port != LIVE_PORT:
+        raise RouteError(f"Unexpected local port {port}")
+    if path not in ("/version", "/ready"):
+        raise RouteError(f"Unsupported HTTP path {path}")
+
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+    try:
+        connection.request("GET", path, headers={"Cache-Control": "no-store"})
+        response = connection.getresponse()
         if response.status != 200:
             raise RouteError(f"HTTP {response.status} from port {port}")
         result = json.load(response)
+    finally:
+        connection.close()
+
     if not isinstance(result, dict):
         raise RouteError(f"Invalid response from port {port}")
     return result
@@ -68,7 +75,7 @@ def observed_live_slot() -> tuple[str, tuple[str, str]]:
         try:
             if release(port) == live:
                 matches.append(slot)
-        except (OSError, ValueError, RouteError, urllib.error.URLError):
+        except (OSError, ValueError, RouteError, http.client.HTTPException):
             continue
     if len(matches) != 1:
         raise RouteError(
@@ -178,7 +185,7 @@ def wait_for_live(expected: tuple[str, str], seconds: float = 10.0) -> None:
             last = release(LIVE_PORT)
             if last == expected:
                 return
-        except (OSError, ValueError, RouteError, urllib.error.URLError) as exc:
+        except (OSError, ValueError, RouteError, http.client.HTTPException) as exc:
             last = str(exc)
         time.sleep(0.25)
     raise RouteError(f"Nginx did not converge: expected={expected}; actual={last}")
