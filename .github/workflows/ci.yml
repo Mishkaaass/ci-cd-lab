@@ -69,6 +69,9 @@ jobs:
       - name: Check Python syntax
         run: python -m py_compile app.py test_app.py
 
+      - name: Check reviewer and GitOps shell scripts
+        run: bash -n scripts/reviewer.sh scripts/gitops-demo.sh scripts/lab.sh
+
       - name: Run automated tests
         run: python -m pytest -v
 

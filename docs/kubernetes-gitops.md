@@ -4,6 +4,74 @@ Argo CD tracks `main:k8s/opsboard` in `Mishkaaass/ci-cd-lab`.
 `k8s/argocd/opsboard.yaml` bootstraps its AppProject and Application;
 it is applied separately after merging the manifests and adding Git credentials.
 
+## Reviewer setup: isolated, reproducible lab
+
+This repo now includes a **dedicated** kind/Argo CD bootstrap. It uses a
+cluster called `opsboard-review` and a private kubeconfig in
+`~/.local/state/opsboard-gitops-review/`, **not** your default context or
+the owner's older `kind-ci-cd-platform` environment.
+
+Install Docker Engine, kind and kubectl first, then run from the checkout:
+
+```bash
+bash scripts/gitops-demo.sh doctor
+bash scripts/gitops-demo.sh up
+bash scripts/gitops-demo.sh status
+bash scripts/gitops-demo.sh drift-test
+```
+
+The bootstrap installs pinned Argo CD v3.6.1, generates fresh *local* OpsBoard
+and PostgreSQL credentials, and creates the Kubernetes Secrets outside Git.
+It uses the manifest's digest-pinned GHCR image; **it does not build or silently
+promote a new version.** The `drift-test` changes replicas to 2 in this isolated
+cluster, waits for Argo to restore Git's `replicas: 1`, and restores 1 itself
+on timeout. This demonstrates self-healing, not a Kubernetes rollback.
+
+**Repository and package visibility:** With a public GitHub repo and public GHCR
+package, the bootstrap can read both without credentials. Private resources
+require dedicated read-only token files:
+
+```bash
+# Example paths; create the files securely yourself. Never paste token values.
+GITOPS_READ_TOKEN_FILE="$HOME/.config/opsboard/git-read.token" \
+GHCR_TOKEN_FILE="$HOME/.config/opsboard/ghcr-read.token" \
+GHCR_USERNAME="your-github-username" \
+bash scripts/gitops-demo.sh up
+```
+
+Only set the variables needed for private resources. GitHub repository read
+access and GHCR `read:packages` are the intended minimum privileges. Tokens
+are never passed on the command line or written into Git, but their pull
+credentials **are** stored as Kubernetes Secrets in the disposable cluster
+and as private configuration in the user's home directory. Use dedicated
+low-privilege credentials. Do not use an admin or broad-scoped personal token.
+
+To use your fork instead of the original repository, pass
+`GITOPS_REPO_URL=https://github.com/OWNER/FORK.git`. Argo tracks its `main`
+branch. The image reference in the manifest may still use the original GHCR
+package unless your fork deliberately changes it in a reviewed commit.
+
+The following commands use local-only port forwarding:
+
+```bash
+bash scripts/gitops-demo.sh ui   # https://127.0.0.1:18080, Argo CD
+bash scripts/gitops-demo.sh app  # http://127.0.0.1:18081, Kubernetes OpsBoard
+```
+
+Retrieve Argo's initial admin password from `argocd-initial-admin-secret`
+using the **dedicated** kubeconfig/context from the README. OpsBoard viewer
+and operator token files are saved under the private state directory. Never
+share these tokens/screenshots.
+
+**Cleanup is explicitly destructive:**
+`bash scripts/gitops-demo.sh down --delete-my-lab` deletes only the owned
+`opsboard-review` cluster, including its disposable PostgreSQL PVC. It refuses
+an unknown cluster with the same name. Local secret files are preserved
+for inspection; never treat the kind PVC as a backup.
+
+The older manual GitOps runbook below describes the author's original cluster.
+The two environments must not be mixed or pointed at the same live database.
+
 ## Components
 
 - `opsboard` Deployment and Service: FastAPI on container port 8000, Service port 80.
