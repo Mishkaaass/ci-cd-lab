@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="OpsBoard, a secure local delivery control center for Docker Blue/Green and Kubernetes GitOps.">
+  <title>OpsBoard — Delivery control center</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script defer src="/assets/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <section class="gate" id="gate" aria-label="Unlock local console">
+    <div class="gate-container">
+      <div class="gate-brand"><span class="brand-symbol">O<span></span></span><span>OpsBoard <small>CONTROL CENTER</small></span></div>
+      <div class="gate-content">
+        <p class="eyebrow"><span class="live-dot"></span> LOCAL OPERATIONS LAB / READ ONLY</p>
+        <h1>One console.<br><em>Two delivery paths.</em></h1>
+        <p class="gate-description">A single place to verify release safety, cluster reconciliation, and the controls between code and production.</p>
+        <form id="unlock-form" autocomplete="off">
+          <label for="viewer-token">Local console viewer token</label>
+          <div class="token-row"><input id="viewer-token" type="password" name="token" minlength="40" spellcheck="false" autocomplete="off" placeholder="Paste your local viewer token" required><button type="submit" id="unlock-button">Unlock console <span aria-hidden="true">↗</span></button></div>
+          <p class="form-error" id="unlock-error" role="alert" aria-live="polite"></p>
+        </form>
+        <div class="gate-help"><span class="inline-code">cat ~/.config/ci-cd-lab/unified-console/viewer.token</span><button class="mini-copy" data-copy="cat ~/.config/ci-cd-lab/unified-console/viewer.token" aria-label="Copy token retrieval command">Copy</button></div>
+        <p class="small-muted">Your token stays in this browser tab's memory. No credentials are stored in local storage or sent to external services.</p>
+      </div>
+      <div class="gate-bottom"><span>OPSBOARD / LOCAL ENVIRONMENT</span><span>01 — DOCKER <i></i> 02 — GITOPS</span></div>
+    </div>
+  </section>
+
+  <div class="shell" id="shell" hidden>
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="sidebar-head"><span class="brand-symbol small">O<span></span></span><div><strong>OpsBoard</strong><small>DELIVERY CONTROL</small></div></div>
+      <div class="workspace-tag"><span class="live-dot"></span><span>Local lab</span><span class="tag-mini">01 / 02</span></div>
+      <p class="sidebar-label">WORKSPACE</p>
+      <nav class="nav-list" aria-label="Sections">
+        <button class="nav-link active" data-view="overview" aria-current="page"><span class="nav-icon">▦</span>Overview<span class="nav-index">01</span></button>
+        <button class="nav-link" data-view="docker"><span class="nav-icon">⬡</span>Docker delivery<span class="nav-index">02</span></button>
+        <button class="nav-link" data-view="kubernetes"><span class="nav-icon">◇</span>Kubernetes GitOps<span class="nav-index">03</span></button>
+        <button class="nav-link" data-view="security"><span class="nav-icon">◈</span>Pipeline &amp; security<span class="nav-index">04</span></button>
+        <button class="nav-link" data-view="runbook"><span class="nav-icon">≡</span>Runbooks<span class="nav-index">05</span></button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-bottom"><div class="read-only-mark"><span class="lock">◦</span><div><strong>Observer mode</strong><small>No privileged web actions</small></div></div><button class="signout" id="lock-console">Lock console <span>↗</span></button></div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar"><div class="crumb">WORKSPACE <span>/</span> <strong id="crumb-label">OVERVIEW</strong></div><div class="topbar-right"><span class="last-sync" id="last-sync">NOT CHECKED</span><button id="refresh" class="refresh-button" aria-label="Refresh operational status">↻ <span>Refresh</span></button><span class="avatar">OB</span></div></header>
+      <main id="main" tabindex="-1">
+        <section class="page" id="page-overview" data-page="overview">
+          <div class="page-intro"><div><p class="eyebrow">OPERATIONS / OVERVIEW <span class="divider-dot">·</span> <span id="overview-date">LIVE STATUS</span></p><h1>Delivery, without the guesswork.</h1><p class="lead">A clear view of what is running, what passed, and what can be safely changed.</p></div><a class="subtle-link" href="https://github.com/Mishkaaass/ci-cd-lab" target="_blank" rel="noopener noreferrer">View repository <span>↗</span></a></div>
+          <div class="metric-grid">
+            <article class="metric"><div class="metric-top"><span>LIVE DOCKER RELEASE</span><span class="metric-icon">⬡</span></div><strong id="metric-docker">—</strong><div class="metric-bottom"><span class="status-dot" id="dot-docker"></span><span id="metric-docker-detail">Awaiting connection</span></div></article>
+            <article class="metric"><div class="metric-top"><span>MAIN BRANCH / CI</span><span class="metric-icon">⌁</span></div><strong id="metric-ci">—</strong><div class="metric-bottom"><span class="status-dot" id="dot-ci"></span><span id="metric-ci-detail">Awaiting connection</span></div></article>
+            <article class="metric"><div class="metric-top"><span>GITOPS RECONCILIATION</span><span class="metric-icon">◇</span></div><strong id="metric-argo">—</strong><div class="metric-bottom"><span class="status-dot" id="dot-argo"></span><span id="metric-argo-detail">Awaiting connection</span></div></article>
+            <article class="metric"><div class="metric-top"><span>DATABASE PERSISTENCE</span><span class="metric-icon">▤</span></div><strong id="metric-pvc">—</strong><div class="metric-bottom"><span class="status-dot" id="dot-pvc"></span><span id="metric-pvc-detail">Awaiting connection</span></div></article>
+          </div>
+          <div class="section-heading"><div><p class="eyebrow">01 / RUNTIME</p><h2>Two environments, one release discipline.</h2></div><span class="meta-note">Independent infrastructure · shared controls</span></div>
+          <div class="environments">
+            <article class="environment-card docker-card"><div class="env-top"><div class="env-icon">⬡</div><span class="tiny-upper">DEPLOYMENT PATH 01</span><span class="env-state" id="docker-state">UNKNOWN</span></div><h3>Docker <span>/</span> Blue–Green</h3><p class="env-text">Validate an inactive candidate. Move traffic only after readiness and release identity checks. Roll back to the exact original.</p><div class="env-rows"><div><span>Active traffic</span><strong id="docker-slot">Not observed</strong></div><div><span>Current release</span><strong class="mono" id="docker-version">—</strong></div><div><span>Deployment history</span><strong id="docker-history">Not connected</strong></div></div><button class="detail-link" data-view="docker">Inspect Docker delivery <span>↗</span></button></article>
+            <article class="environment-card kube-card"><div class="env-top"><div class="env-icon">◇</div><span class="tiny-upper">DEPLOYMENT PATH 02</span><span class="env-state" id="kube-state">UNKNOWN</span></div><h3>Kubernetes <span>/</span> GitOps</h3><p class="env-text">Git defines desired state. Argo CD reconciles drift. The application stays pinned to an immutable image digest.</p><div class="env-rows"><div><span>Argo CD</span><strong id="kube-sync">Not observed</strong></div><div><span>Ready / desired</span><strong id="kube-replicas">—</strong></div><div><span>Git revision</span><strong class="mono" id="kube-revision">—</strong></div></div><button class="detail-link" data-view="kubernetes">Inspect GitOps runtime <span>↗</span></button></article>
+          </div>
+          <div class="section-heading bottom-space"><div><p class="eyebrow">02 / DELIVERY MODEL</p><h2>From source to a verified release.</h2></div><span class="meta-note">No silent promotion to GitOps</span></div>
+          <div class="process"><div class="process-step"><span class="step-index">01</span><strong>Pull request</strong><small>Review + branch protection</small></div><span class="process-arrow">→</span><div class="process-step"><span class="step-index">02</span><strong>Seven CI gates</strong><small>Quality, tests, security</small></div><span class="process-arrow">→</span><div class="process-step"><span class="step-index">03</span><strong>Verified image</strong><small>Digest + SBOM + provenance</small></div><span class="process-arrow">→</span><div class="process-step accent-step"><span class="step-index">04</span><strong>Explicit promotion</strong><small>Docker or reviewed GitOps change</small></div></div>
+        </section>
+
+        <section class="page" id="page-docker" data-page="docker" hidden><div class="page-intro"><div><p class="eyebrow">DEPLOYMENT PATH 01 / DOCKER</p><h1>Blue–Green delivery.</h1><p class="lead">Release verification before traffic changes. Predictable rollback after deployment.</p></div><span class="outline-tag">LOCAL COMPOSE</span></div>
+          <div class="detail-grid"><article class="panel"><p class="eyebrow">PRODUCTION TRAFFIC</p><div class="big-value" id="docker-detail-release">—</div><p class="dim" id="docker-detail-sha">Git SHA not observed</p><div class="two-slots"><div class="slot"><span class="slot-orb blue"></span><span>BLUE</span><strong id="slot-blue">—</strong><small id="slot-blue-state">No signal</small></div><div class="slot"><span class="slot-orb green"></span><span>GREEN</span><strong id="slot-green">—</strong><small id="slot-green-state">No signal</small></div></div><p class="panel-footnote">The active slot is inferred only when Nginx's release identity matches exactly one candidate.</p></article><article class="panel"><p class="eyebrow">RELEASE GUARDRAILS</p><div class="check-row"><span class="check-symbol">01</span><div><strong>Candidate readiness</strong><small>Reject failed health checks before switching</small></div></div><div class="check-row"><span class="check-symbol">02</span><div><strong>Version + SHA identity</strong><small>Confirm the artifact being promoted</small></div></div><div class="check-row"><span class="check-symbol">03</span><div><strong>Reversible traffic switch</strong><small>Validate Nginx config and original rollback target</small></div></div><div class="safe-callout">Operations stay in guarded terminal scripts. This viewer cannot run Docker or change live traffic.</div></article></div>
+          <div class="section-heading"><div><p class="eyebrow">DEPLOYMENT HISTORY</p><h2>Recent recorded releases.</h2></div><span id="history-note" class="meta-note">Connect Docker OpsBoard for history</span></div><div class="panel event-panel" id="docker-events"><p class="empty">No events available. Run the local Docker dashboard to expose historical events.</p></div>
+        </section>
+
+        <section class="page" id="page-kubernetes" data-page="kubernetes" hidden><div class="page-intro"><div><p class="eyebrow">DEPLOYMENT PATH 02 / GITOPS</p><h1>Desired state is the contract.</h1><p class="lead">Git holds the deployment specification. Argo CD identifies and repairs configuration drift.</p></div><span class="outline-tag">LOCAL KIND CLUSTER</span></div>
+          <div class="detail-grid"><article class="panel"><p class="eyebrow">ARGO CD APPLICATION</p><div class="kube-health"><strong class="big-value" id="argo-health">—</strong><span class="state-label" id="argo-sync-state">NOT OBSERVED</span></div><div class="keyvalues"><div><span>Revision tracked</span><strong class="mono" id="argo-revision">—</strong></div><div><span>Deployment ready</span><strong id="argo-ready">—</strong></div><div><span>PostgreSQL PVC</span><strong id="argo-pvc">—</strong></div></div></article><article class="panel"><p class="eyebrow">IMMUTABLE APPLICATION IMAGE</p><p class="dim">The workload must reference a specific image digest. A completed CD run does not automatically change this manifest.</p><div class="digest-box" id="argo-image">Image not observed</div><div class="safe-callout">Promote to Kubernetes with a reviewed manifest change; let Argo CD perform the reconciliation.</div></article></div>
+          <div class="section-heading"><div><p class="eyebrow">SELF-HEALING DRILL</p><h2>Prove the cluster returns to Git.</h2></div></div><div class="process process-three"><div class="process-step"><span class="step-index">01</span><strong>Record desired replicas</strong><small>Git manifest defines 1</small></div><span class="process-arrow">→</span><div class="process-step"><span class="step-index">02</span><strong>Introduce drift</strong><small>Temporarily scale to 2 via guarded script</small></div><span class="process-arrow">→</span><div class="process-step accent-step"><span class="step-index">03</span><strong>Observe reconciliation</strong><small>Argo restores 1 · Synced / Healthy</small></div></div>
+        </section>
+
+        <section class="page" id="page-security" data-page="security" hidden><div class="page-intro"><div><p class="eyebrow">BUILD TRUST / SUPPLY CHAIN</p><h1>Security is a release condition.</h1><p class="lead">A tested image is not enough. Delivery needs authenticated provenance, explicit gates, and reviewable boundaries.</p></div><a class="subtle-link" id="ci-link" href="https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml" target="_blank" rel="noopener noreferrer">Open GitHub CI ↗</a></div>
+          <div class="security-hero"><div><p class="eyebrow">LATEST MAIN BRANCH RUN</p><div class="big-value" id="ci-result">—</div><p class="dim" id="ci-revision">Not connected to GitHub Actions</p></div><div class="security-mini"><strong id="ci-count">—</strong><span>REPORTED CI JOBS</span></div></div><div class="section-heading"><div><p class="eyebrow">CHECK EXECUTION</p><h2>What the pipeline actually reported.</h2></div></div><div class="ci-jobs" id="ci-jobs"><p class="empty">Run GitHub CLI authentication to show latest job results.</p></div>
+          <div class="section-heading"><div><p class="eyebrow">POLICY MODEL</p><h2>Controls and boundaries.</h2></div></div><div class="security-controls"><article><span>01 / SOURCE</span><strong>Gitleaks + dependency scan</strong><p>Detect exposed secrets and vulnerable packages before promotion.</p></article><article><span>02 / ARTIFACT</span><strong>Trivy + verified digest</strong><p>Apply the image policy and record exactly which artifact passed.</p></article><article><span>03 / PROVENANCE</span><strong>SBOM + build attestations</strong><p>Make dependencies and the build chain inspectable.</p></article><article><span>04 / DEPLOYMENT</span><strong>Restricted promotion</strong><p>GitOps changes are reviewed separately from image publication.</p></article></div><p class="fineprint">Policy descriptions reflect the repository design. Live green indicators above appear only when GitHub returns successful job results.</p>
+        </section>
+
+        <section class="page" id="page-runbook" data-page="runbook" hidden><div class="page-intro"><div><p class="eyebrow">OPERATOR NOTES / LOCAL LAB</p><h1>Make the safe path obvious.</h1><p class="lead">Short, reproducible commands. Privileged actions stay in the terminal with explicit review.</p></div><span class="outline-tag">READ-ONLY CONSOLE</span></div>
+          <div class="runbook-grid"><article class="panel"><p class="eyebrow">DOCKER / BLUE–GREEN</p><h2>Check and exercise release safety.</h2><p class="dim">Run from the repository root. An unhealthy candidate must not receive traffic.</p><div class="command"><code>bash scripts/reviewer.sh doctor</code><button data-copy="bash scripts/reviewer.sh doctor">Copy</button></div><div class="command"><code>bash scripts/reviewer.sh status</code><button data-copy="bash scripts/reviewer.sh status">Copy</button></div><div class="command"><code>bash scripts/reviewer.sh drill</code><button data-copy="bash scripts/reviewer.sh drill">Copy</button></div><p class="runbook-note">Drill recreates an inactive candidate, verifies promotion and performs exact rollback.</p></article><article class="panel"><p class="eyebrow">KUBERNETES / GITOPS</p><h2>Inspect desired state and drift.</h2><p class="dim">Requires the dedicated kind cluster and pinned kubeconfig.</p><div class="command"><code>bash scripts/gitops-demo.sh doctor</code><button data-copy="bash scripts/gitops-demo.sh doctor">Copy</button></div><div class="command"><code>bash scripts/gitops-demo.sh status</code><button data-copy="bash scripts/gitops-demo.sh status">Copy</button></div><div class="command"><code>bash scripts/gitops-demo.sh drift-test</code><button data-copy="bash scripts/gitops-demo.sh drift-test">Copy</button></div><p class="runbook-note">Drift test temporarily changes replica count, then verifies Argo CD reconciliation.</p></article></div>
+          <div class="runbook-bottom"><div><strong>Why are there two paths?</strong><p>They solve different problems. Docker demonstrates the mechanics of safe traffic promotion and rollback; GitOps demonstrates declarative control of an independent cluster. The console observes both without combining their permissions.</p></div><div><strong>What this lab does not claim</strong><p>No public-cloud deployment, enterprise SSO, managed backup or automatic GitOps image promotion. A bound PVC is persistent storage, not a verified backup.</p></div></div>
+        </section>
+      </main>
+      <footer class="footer"><span>OPSBOARD / DELIVERY ENGINEERING</span><span>LOCAL-ONLY · READ-ONLY · NO TELEMETRY</span><span id="footer-status" aria-live="polite">STATUS NOT OBSERVED</span></footer>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
