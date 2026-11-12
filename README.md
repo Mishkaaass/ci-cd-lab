@@ -10,6 +10,68 @@
 
 **Deployment boundaries:** The Docker Compose Blue/Green demo and the Kubernetes/Argo CD GitOps demo intentionally follow **separate paths**. Docker demonstrates candidate verification, traffic promotion, and rollback; Argo CD reconciles Kubernetes resources against Git. Passing CI and publishing an image does not automatically promote it to the GitOps deployment.
 
+<!-- opsboard-reviewer-quickstart-v4:start -->
+## Start here: two independent, secure demos
+
+These are **separate paths**: Demo 1 uses Docker Compose for verified Blue/Green traffic promotion and rollback; Demo 2 uses Kubernetes + Argo CD for GitOps reconciliation. CI publishes a digest-pinned, scanned image; the new image is **not automatically promoted** into the GitOps deployment. Both demos are local; no AWS account is needed.
+
+| | Demo 1 - Docker Blue/Green | Demo 2 - Kubernetes GitOps |
+|---|---|---|
+| What it proves | Readiness gate, traffic switch, rejected release, rollback | Desired state, Argo CD sync/health, self-healing after drift |
+| UI | `http://127.0.0.1:18001/dashboard` | Argo: `https://127.0.0.1:18080`; app: `http://127.0.0.1:18081/dashboard` |
+| Credentials | Locally generated **Viewer token** | Argo user **`admin`** + local initial password; separate OpsBoard Viewer token |
+
+**Demo 1 - start it** (Linux, Docker/Compose; run `doctor` first). In terminal A, keep the dashboard command running:
+
+```bash
+bash scripts/reviewer.sh doctor
+bash scripts/reviewer.sh dashboard
+```
+
+In terminal B, from the repo root:
+
+```bash
+bash scripts/reviewer.sh up
+bash scripts/reviewer.sh tokens
+bash scripts/reviewer.sh drill
+```
+
+The `tokens` command prints `Viewer token file:` and its **private local path**. To read it only on your own computer, run:
+
+```bash
+VIEWER_FILE="$(bash scripts/reviewer.sh tokens | sed -n 's/^Viewer token file:[[:space:]]*//p')"
+test -f "$VIEWER_FILE" && cat "$VIEWER_FILE"
+```
+
+Enter it in the dashboard. Never copy it into Git, CI logs, screenshots or issues. The drill demonstrates a failed candidate being blocked, healthy promotion, and rollback; use `status` to inspect the result.
+
+**Demo 2 - start it** (Docker, kind/kubectl requirements are checked by `doctor`):
+
+```bash
+bash scripts/gitops-demo.sh doctor
+bash scripts/gitops-demo.sh up
+bash scripts/gitops-demo.sh status
+bash scripts/gitops-demo.sh drift-test
+```
+
+In **two other terminals**, keep `bash scripts/gitops-demo.sh ui` and `bash scripts/gitops-demo.sh app` running for the local browser URLs shown above. Sign into **Argo CD** as `admin`; retrieve its bootstrap password **locally**:
+
+```bash
+KCFG="${XDG_STATE_HOME:-$HOME/.local/state}/opsboard-gitops-review/kubeconfig"
+kubectl --kubeconfig "$KCFG" --context kind-opsboard-review -n argocd \
+  get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 --decode
+printf '\n'
+```
+
+The **Kubernetes OpsBoard** login uses a different local Viewer token:
+
+```bash
+cat "${XDG_STATE_HOME:-$HOME/.local/state}/opsboard-gitops-review/auth/viewer.token"
+```
+
+**Security and release control:** PR checks enforce Python tests, code quality, dependency/secret/container checks, browser/API security and an isolated attack scan. The release pipeline verifies the image digest, produces an SBOM and provenance, and uses Trivy/Gitleaks gates. Credentials are **private**, generated locally and excluded from the repo. `admin` is a lab bootstrap account, **not** a production authentication recommendation (use SSO/RBAC and managed secrets in production). GitOps changes require a separate reviewed manifest change. `drift-test` verifies reconciliation, **not** an application-image rollback. Do not run `down -v` or `--delete-my-lab` unless you intentionally want to remove persisted data/PVCs.
+<!-- opsboard-reviewer-quickstart-v4:end -->
+
 ## How the delivery pipeline works
 
 **Pull request → 7 GitHub Actions CI checks → approved `main` → CD → scanned image in GHCR** (verified digest, SBOM, build provenance). Failed security or quality gates block promotion. Kubernetes images are updated through a **reviewed GitOps manifest change**; Argo CD reconciles that desired state.
