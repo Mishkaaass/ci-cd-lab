@@ -8,6 +8,8 @@
 
 > **Scope:** Two **independent local labs**, not a production AWS/EKS deployment. Docker Blue/Green tests release safety; Kubernetes + Argo CD tests desired-state reconciliation. A new GHCR image is **not automatically promoted** to Kubernetes.
 
+**Deployment boundaries:** The Docker Compose Blue/Green demo and the Kubernetes/Argo CD GitOps demo intentionally follow **separate paths**. Docker demonstrates candidate verification, traffic promotion, and rollback; Argo CD reconciles Kubernetes resources against Git. Passing CI and publishing an image does not automatically promote it to the GitOps deployment.
+
 ## How the delivery pipeline works
 
 **Pull request → 7 GitHub Actions CI checks → approved `main` → CD → scanned image in GHCR** (verified digest, SBOM, build provenance). Failed security or quality gates block promotion. Kubernetes images are updated through a **reviewed GitOps manifest change**; Argo CD reconciles that desired state.
