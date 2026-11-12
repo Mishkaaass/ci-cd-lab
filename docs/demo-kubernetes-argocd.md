@@ -4,6 +4,19 @@
 
 **How it works:** The script creates an isolated kind Kubernetes cluster called `opsboard-review`, installs Argo CD, and applies the app definition from the repository's **GitHub `main` branch**. Kubernetes runs OpsBoard + PostgreSQL, with persistent storage in a PVC. Argo CD keeps the cluster aligned with Git.
 
+## Architecture at a glance
+
+```mermaid
+flowchart TB
+    Git["GitHub main: desired state"] --> Argo["Argo CD"]
+    Argo --> K8s["Local Kubernetes: kind"]
+    K8s --> App["OpsBoard Deployment"]
+    K8s --> DB["PostgreSQL PVC"]
+    GHCR["GHCR: digest-pinned image"] --> App
+    Change["Manual replica change"] --> K8s
+    Argo -->|Self-healing| K8s
+```
+
 ## Before you start
 
 - **Linux** with Git, Bash, `curl` and internet access.
