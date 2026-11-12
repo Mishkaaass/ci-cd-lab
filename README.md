@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml)
 [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml)
-[![Release](https://img.shields.io/badge/release-v1.0.0-2563eb)](https://github.com/Mishkaaass/ci-cd-lab/releases/tag/v1.0.0)
+[![Latest Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab?display_name=tag)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
 
 **A real, security-gated delivery system you can run and break safely.** Build an image, verify it in GitHub Actions, deploy a healthy candidate, reject a broken one, roll back traffic, and inspect a separate Kubernetes/Argo CD GitOps environment.
 
