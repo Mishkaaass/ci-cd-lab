@@ -1,67 +1,60 @@
-# OpsBoard · CI/CD Platform
+# OpsBoard | CI/CD & GitOps, hands-on
 
 [![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml)
 [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml)
 [![Latest Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab?display_name=tag)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
 
-**A real, security-gated delivery system you can run and break safely.** Build an image, verify it in GitHub Actions, deploy a healthy candidate, reject a broken one, roll back traffic, and inspect a separate Kubernetes/Argo CD GitOps environment.
+**An application, a real delivery pipeline, and two safe deployment demos.** See how code is tested, scanned, packaged, deployed and recovered from failure. Clone the repo, choose **one demo**, and follow the steps below.
 
-> **Scope:** A reproducible **local DevOps lab**, not a production SaaS or AWS/EKS deployment. The Docker Blue/Green demo and Kubernetes GitOps deployment are intentionally **separate paths**. The dashboard does **not** run privileged Docker commands from the browser.
+> **What this is:** A reproducible **local DevOps lab**, not a hosted production service or AWS/EKS deployment. Docker Blue/Green and Kubernetes GitOps are **separate paths**, using the same repository. No cloud account required.
 
-## Architecture at a glance
+## What happens when code changes?
 
 ```mermaid
 flowchart TB
-  Dev["Git push / pull request"] --> CI["GitHub Actions CI · 7 checks"]
-  CI --> Gate{"Tests + security gates"}
-  Gate -->|Fail| Block["Block release"]
-  Gate -->|Pass on main| CD["GitHub Actions CD"]
-  CD --> Scan["Trivy + isolated API scan"]
-  Scan --> Registry["GHCR · digest + SBOM + provenance"]
-  Registry -.->|Reviewed promotion PR| Git["k8s/opsboard manifests"]
-  Git --> Argo["Argo CD · sync and self-heal"]
-  Argo --> K8s["Kubernetes kind · OpsBoard + PostgreSQL PVC"]
-  subgraph Demo["Local hands-on demo — Docker Compose"]
-    CLI["Safe terminal CLI"] --> Blue["Blue container"]
-    CLI --> Green["Green container"]
-    Blue --> Nginx["Nginx · active traffic :8080"]
-    Green --> Nginx
-    UI["OpsBoard :18001"] -->|"Monitor + audit history"| Nginx
-  end
+  Git["Push / pull request"] --> CI["GitHub Actions: tests + security scans"]
+  CI --> Gate{"All required checks pass?"}
+  Gate -->|No| Block["Release blocked"]
+  Gate -->|Yes, on main| CD["Build, test and publish Docker image"]
+  CD --> GHCR["GHCR: verified image digest + SBOM + provenance"]
+  GHCR -.->|"Explicit, reviewed GitOps image update"| Manifests["Kubernetes manifests in Git"]
+  Manifests --> Argo["Argo CD: sync + self-heal"]
+  Argo --> K8s["Kubernetes: OpsBoard + PostgreSQL"]
 ```
 
-**What each part proves:**
-
-| Component | See it working |
+| Tool | Its job in this repo |
 | --- | --- |
-| **GitHub Actions** | Seven CI jobs; CD publishes only after successful `main` CI |
-| **Docker + Blue/Green** | Two service slots, Nginx live route, readiness and release-ID checks |
-| **Deploy / rollback** | Broken candidate blocked → healthy release promoted → old version restored |
-| **Security gates** | Python tests, Ruff, Bandit, pip-audit, Gitleaks, Trivy and isolated ZAP scan |
-| **SBOM / provenance** | Buildx attestations on the GHCR release image; digest verification |
-| **Kubernetes** | Real Deployment, probes, non-root containers, StatefulSet and PostgreSQL PVC |
-| **Argo CD** | Watches Git manifests; `Synced / Healthy` and optional self-healing drill |
-| **OpsBoard UI** | Authenticated dashboard, health, incidents and CLI deployment history |
+| **GitHub Actions** | Run seven CI checks; publish an image after successful `main` CI. |
+| **Trivy / Gitleaks / other gates** | Scan images, dependencies, code and secrets; block failures against policy. |
+| **SBOM / provenance** | Record image contents and build attestations. |
+| **Docker + Nginx** | Run two app versions and direct live traffic to one. |
+| **Deploy / rollback** | Promote only a verified version; restore the exact previous release. |
+| **Kubernetes + Argo CD** | Run a Git-defined application and repair configuration drift. |
+| **OpsBoard UI** | Show health and deployment history; privileged deploys stay in the terminal. |
 
-## Try it: Docker Blue/Green (about 5 minutes after setup)
+## Choose a demo
 
-**Linux prerequisites:** Git, Python **3.14** + `venv`, Docker Engine + Compose plugin, `curl` and Bash. Docker needs working permissions (`sudo` is supported). No cloud account or Kubernetes is needed for this first walkthrough.
+Start once (Linux with Git, Bash and Docker; each guide lists its additional requirements):
 
 ```bash
 git clone https://github.com/Mishkaaass/ci-cd-lab.git
 cd ci-cd-lab
-bash scripts/reviewer.sh doctor
 ```
 
-**Terminal A — dashboard** (leave running):
+### Demo 1 — Docker Blue/Green (start here)
+
+**Goal:** Prove that a broken release never receives traffic, a healthy release can go live, and rollback restores the original version.
+
+**Needs:** Python **3.14** with `venv`, Docker Engine + Compose, `curl`. Run the next blocks from the **same checkout**.
+
+**Terminal A — keep the dashboard running:**
 
 ```bash
+bash scripts/reviewer.sh doctor  # Confirm no tools are marked MISSING
 bash scripts/reviewer.sh dashboard
 ```
 
-Open **[OpsBoard Dashboard](http://127.0.0.1:18001/dashboard)**. In terminal B, run `bash scripts/reviewer.sh tokens` to get the **file path** of the locally generated viewer token. Read it locally and use **Unlock**. Never commit or share tokens.
-
-**Terminal B — live service + safe deployment drill:**
+**Terminal B — start services and run the live drill:**
 
 ```bash
 bash scripts/reviewer.sh up
@@ -69,62 +62,58 @@ bash scripts/reviewer.sh status
 bash scripts/reviewer.sh drill
 ```
 
-The drill intentionally tries a broken version first; its individual deployment command fails **as expected**, while the overall drill passes only if active traffic never moved. It then promotes a healthy version and verifies an **exact rollback** to the previous release.
+**What you should see:** `Broken candidate rejected` → traffic switches to the healthy version → `Rollback` restores the original release and Git SHA. The drill ends with `PASS` only after checking the live service.
+
+Open [**OpsBoard**](http://127.0.0.1:18001/dashboard). For the **Unlock** form, run `bash scripts/reviewer.sh tokens` in Terminal B to find your local **viewer token file**; read its contents **on your machine only**. The browser shows results; deploy buttons are intentionally disabled.
+
+**[Full beginner walkthrough → Docker Blue/Green](docs/demo-docker-blue-green.md)**
 
 ```mermaid
 sequenceDiagram
-  participant CLI as Terminal
+  participant Terminal
   participant Candidate as Inactive container
-  participant Nginx as Nginx (live)
-  CLI->>Candidate: Deploy broken release
-  Candidate-->>CLI: /ready fails
-  Note over Nginx: Original traffic stays live
-  CLI->>Candidate: Deploy healthy release
-  Candidate-->>CLI: /ready + /version match
-  CLI->>Nginx: Validate config, switch route
-  Nginx-->>CLI: New release confirmed
-  CLI->>Nginx: Rollback to original healthy slot
-  Nginx-->>CLI: Original release confirmed
+  participant Proxy as Live Nginx
+  Terminal->>Candidate: Try broken release
+  Candidate-->>Terminal: Readiness fails
+  Note over Proxy: Keep original live release
+  Terminal->>Candidate: Try healthy release
+  Candidate-->>Terminal: Ready + version verified
+  Terminal->>Proxy: Switch traffic
+  Terminal->>Proxy: Roll back
+  Proxy-->>Terminal: Original release verified
 ```
 
-The UI uses **private SQLite** for incident/deployment history; the Compose demo includes PostgreSQL for the broader lab but does not wire it into that dashboard. The web Deploy buttons remain **disabled** in beginner mode, so the browser never receives Docker/root permissions. Open [FastAPI API docs](http://127.0.0.1:18001/docs) for authenticated incident operations.
+### Demo 2 — Kubernetes + Argo CD (independent)
 
-## Try it: real Kubernetes + Argo CD (optional, separate lab)
+**Goal:** Prove that Kubernetes runs the application and Argo CD restores the state defined in Git after someone changes it manually.
 
-Requires [**kind**](https://kind.sigs.k8s.io/docs/user/quick-start/), [**kubectl**](https://kubernetes.io/docs/tasks/tools/), Docker, internet access and a GitHub repository/image that Argo/Kubernetes can read. The script uses an isolated cluster named `opsboard-review`, a **private kubeconfig**, and local Secrets created **outside Git**. It never touches your default Kubernetes context or existing `kind-ci-cd-platform` cluster.
+**Needs:** Docker, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/), [kubectl](https://kubernetes.io/docs/tasks/tools/), Git and internet access. No Python 3.14 dashboard setup required for this lab.
 
 ```bash
 bash scripts/gitops-demo.sh doctor
 bash scripts/gitops-demo.sh up
 bash scripts/gitops-demo.sh status
-```
-
-On separate terminals, open **Argo CD** (`https://127.0.0.1:18080`) and **Kubernetes OpsBoard** (`http://127.0.0.1:18081/dashboard`):
-
-```bash
-bash scripts/gitops-demo.sh ui
-# In another terminal:
-bash scripts/gitops-demo.sh app
-```
-
-For Argo login, use username `admin`; retrieve its initial password *locally* with `kubectl --kubeconfig "$HOME/.local/state/opsboard-gitops-review/kubeconfig" --context kind-opsboard-review -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d` (do not post it). For OpsBoard, the generated viewer token is under `~/.local/state/opsboard-gitops-review/auth/`.
-
-**Prove real GitOps reconciliation** in this disposable lab:
-
-```bash
 bash scripts/gitops-demo.sh drift-test
 ```
 
-It temporarily changes replica count from 1 to 2 and verifies **Argo CD restores Git's desired value of 1**. This is real controller reconciliation; changing the application image or rolling back Kubernetes **still requires a reviewed Git commit** to the three release fields. CI publishing to GHCR does **not** auto-edit GitOps manifests. See [GitOps runbook](docs/kubernetes-gitops.md) and [release checklist](docs/release-checklist.md).
+**What you should see:** A new **isolated** kind cluster; Argo CD `Synced / Healthy`; OpsBoard and PostgreSQL running; a PVC `Bound`; then Argo CD restores replicas from **2 back to 1**.
 
-**Access matters:** If the GitHub repository or GHCR package is private, a new visitor cannot clone/pull them anonymously. Make both readable to reviewers **or** supply scoped read-only credentials via `GITOPS_READ_TOKEN_FILE`, `GHCR_TOKEN_FILE` and `GHCR_USERNAME` as documented in the [GitOps runbook](docs/kubernetes-gitops.md). These are **file paths**, not tokens passed as CLI arguments. No credentials are bundled.
+Open the two interfaces with **separate terminals** (each command keeps running):
 
-**Cleanup:** `bash scripts/gitops-demo.sh down --delete-my-lab` deletes only the owned `opsboard-review` cluster **including its disposable PVC data**. It requires the explicit flag. Stop local Compose separately with `sudo docker compose stop` from the owning checkout; never use `down -v` unless you intend to delete data.
+```bash
+bash scripts/gitops-demo.sh ui   # Argo CD: https://127.0.0.1:18080
+bash scripts/gitops-demo.sh app  # OpsBoard: http://127.0.0.1:18081/dashboard
+```
 
-## What was actually validated?
+**[Full beginner walkthrough → Kubernetes + Argo CD](docs/demo-kubernetes-argocd.md)**
 
-The `v1.0.0` release (commit `9fd77bb`) passed **7/7 GitHub CI jobs**, successful **CD image publication**, a **20/20 read-only acceptance audit**, and a **14/14 live Broken → Healthy → Rollback drill**. The owner's GitOps cluster was `Synced / Healthy`, with a ready Deployment and bound PVC. [Release v1.0.0](https://github.com/Mishkaaass/ci-cd-lab/releases/tag/v1.0.0). These are results from that environment, **not** a claim that a fresh install has been tested on every OS. See [sanitized acceptance evidence](docs/evidence/v1.0.0-acceptance.md).
+> **Important:** Argo CD follows `main` on GitHub, **not** your uncommitted local files. Publishing to GHCR does **not** automatically update the Kubernetes image; promotion needs a reviewed manifest change. This demo tests **self-healing**, not an automatic Kubernetes image rollback.
 
-**Inspect the code:** `.github/workflows/` (CI/CD) · `scripts/deploy.sh`, `rollback.sh`, `nginx_route.py` (safe traffic switching) · `opsboard/` (FastAPI security & operations) · `k8s/` (manifests) · `tests/` (regressions) · [Security model](docs/security-lab.md).
+## Evidence you can inspect
 
-If a port is busy, Docker belongs to another checkout, or the GitOps repo/image is private, the scripts **stop instead of deleting resources or stealing a port**. See [first-time review / troubleshooting](docs/reviewer-tour.md).
+- [CI: seven checks](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) — unit tests, code quality, dependency/secret/image scans, API and browser security tests.
+- [CD: verified image publishing](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) — GHCR image, digest verification, SBOM, provenance and security checks.
+- [v1.1.0 validation](docs/evidence/v1.1.0-validation.md) — observed Blue/Green, Kubernetes, Argo CD, PVC and anonymous GHCR checks.
+- [Security policy](docs/container-security-policy.md) · [GitOps details](docs/kubernetes-gitops.md) · [Troubleshooting](docs/reviewer-tour.md).
+
+**Safety:** The demos bind web ports to `127.0.0.1`; secrets and private tokens stay outside Git. Don't share token contents. No setup command intentionally deletes volumes. The optional kind cleanup command **does delete that demo cluster and its PVC**; see the [Kubernetes guide](docs/demo-kubernetes-argocd.md).
