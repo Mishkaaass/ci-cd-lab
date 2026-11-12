@@ -4,6 +4,17 @@
 
 **How it works:** Docker runs a Blue and a Green copy of the demo app. Nginx sends requests to **one** copy. The deploy script prepares the inactive copy, checks `/ready` and `/version`, and only then switches Nginx. The dashboard displays status and the operation history; it does **not** run Docker commands itself.
 
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    CLI["Reviewer terminal"] --> Deploy["Deploy into inactive container"]
+    Deploy --> Gate{"Readiness and version checks"}
+    Gate -->|Failed| Keep["Keep live traffic unchanged"]
+    Gate -->|Passed| Switch["Nginx switches live traffic"]
+    Switch --> Rollback["Rollback verifies original release"]
+```
+
 ## Before you start
 
 - **Linux** machine with Git, Bash and `curl`.
