@@ -6,7 +6,9 @@
   let busy = false;
   let refreshInterval = null;
   let toastTimeout = null;
-  const pages = new Set(["overview", "docker", "kubernetes", "security", "runbook"]);
+  const pages = new Set(["overview", "docker", "kubernetes", "security", "showcase", "runbook"]);
+  let showcaseActive = false;
+  let demoPoll = null;
 
   function setText(id, value, empty = "—") {
     const el = $(id);
@@ -46,7 +48,7 @@
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    setText("crumb-label", view === "kubernetes" ? "KUBERNETES GITOPS" : view === "docker" ? "DOCKER DELIVERY" : view === "security" ? "PIPELINE & SECURITY" : view.toUpperCase());
+    setText("crumb-label", view === "kubernetes" ? "KUBERNETES GITOPS" : view === "docker" ? "DOCKER DELIVERY" : view === "security" ? "PIPELINE & SECURITY" : view === "showcase" ? "LIVE DEMO" : view.toUpperCase());
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function toast(message) {
@@ -100,7 +102,7 @@
     if (!list.length) {
       const empty = document.createElement("p");
       empty.className = "empty";
-      empty.textContent = "Detailed job data unavailable. The console does not assume green checks without a GitHub response.";
+      empty.textContent = "Job details are not available from GitHub right now. A missing API response is not a passed check.";
       target.append(empty);
       return;
     }
@@ -168,6 +170,96 @@
     }
     setText("footer-status", docker.healthy && kubeHealthy ? "TWO LABS OBSERVED" : "PARTIAL OPERATIONAL VISIBILITY");
   }
+  function renderShowcase(status) {
+    const enabled = Boolean(status.enabled);
+    const state = String(status.status || "offline");
+    showcaseActive = state === "queued" || state === "running";
+    const light = $("showcase-light");
+    light.className = "showcase-light" + (showcaseActive ? " busy" : state === "failed" ? " bad" : enabled ? " live" : "");
+    const labels = { idle: "Ready to demonstrate", queued: "Queued", running: "Live test running", passed: "Verified run complete", failed: "Attention required", offline: "Viewer-only session" };
+    setText("showcase-state", labels[state] || state.toUpperCase());
+    setText("showcase-summary", status.summary || (enabled ? "Click to begin" : "Start scripts/showcase.sh in a terminal to enable guided drills."));
+    const phases = {
+      broken: "Broken candidate test", blocked: "Broken release blocked", healthy: "Validating new release",
+      verified: "Version and SHA verified", green: "GREEN: live traffic", blue: "Rollback: BLUE restored", complete: "Rollback verified",
+      drift: "Changing replicas", scaled: "Drift introduced", restored: "Reconciled to Git"
+    };
+    setText("showcase-docker", phases[status.docker_phase] || "Not run");
+    setText("showcase-gitops", phases[status.gitops_phase] || "Not run");
+    const when = status.started_at ? new Date(status.started_at) : null;
+    setText("showcase-when", when && !Number.isNaN(when.getTime()) ? when.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "—");
+    document.querySelectorAll("button[data-start]").forEach((el) => {
+      el.disabled = !enabled || showcaseActive;
+    });
+    const entries = Array.isArray(status.steps) ? status.steps : [];
+    setText("showcase-event-count", entries.length ? `${entries.length} verified events` : "No events yet");
+    const parent = $("showcase-events");
+    parent.replaceChildren();
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = enabled ? "Run a real drill to record release transitions here." : "The session is view-only. Run scripts/showcase.sh to enable the local demonstration.";
+      parent.append(empty);
+      return;
+    }
+    entries.slice().reverse().forEach((entry) => {
+      const item = document.createElement("div");
+      item.className = "showcase-event " + (["success", "error", "info"].includes(entry.kind) ? entry.kind : "info");
+      const at = document.createElement("time");
+      at.className = "event-time";
+      const d = new Date(entry.at);
+      at.textContent = Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+      const track = document.createElement("span");
+      track.className = "event-track " + (["docker", "gitops"].includes(entry.track) ? entry.track : "");
+      track.textContent = (entry.track || "system").toUpperCase();
+      const text = document.createElement("div");
+      const heading = document.createElement("div");
+      heading.className = "event-title";
+      heading.textContent = entry.title || "Event";
+      text.append(heading);
+      if (entry.detail) {
+        const detail = document.createElement("div");
+        detail.className = "event-detail";
+        detail.textContent = entry.detail;
+        text.append(detail);
+      }
+      item.append(at, track, text);
+      parent.append(item);
+    });
+  }
+  async function pollShowcase() {
+    if (!viewerToken) return;
+    try {
+      const res = await fetch("/api/showcase/status", {
+        headers: {Authorization: `Bearer ${viewerToken}`, Accept: "application/json"},
+        credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(4000)
+      });
+      if (res.ok) renderShowcase(await res.json());
+    } catch {
+      renderShowcase({enabled:false,status:"offline",steps:[],summary:"Live demo status is temporarily unavailable."});
+    }
+  }
+  async function startDemo(action) {
+    if (!viewerToken || showcaseActive || !["all", "docker", "gitops"].includes(action)) return;
+    showcaseActive = true;
+    document.querySelectorAll("button[data-start]").forEach((button) => button.disabled = true);
+    try {
+      const response = await fetch("/api/showcase/start", {
+        method: "POST", headers: {Authorization: `Bearer ${viewerToken}`, "Content-Type": "application/json"},
+        credentials: "omit", cache: "no-store", body: JSON.stringify({action}), signal: AbortSignal.timeout(7000)
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Request blocked (${response.status})`);
+      }
+      toast("Real lab drill queued");
+      await pollShowcase();
+    } catch (error) {
+      toast(`Demo not started: ${error.message}`);
+      showcaseActive = false;
+      await pollShowcase();
+    }
+  }
   async function update() {
     if (!viewerToken || busy) return false;
     busy = true;
@@ -218,7 +310,9 @@
     $("gate").hidden = true;
     $("shell").hidden = false;
     setView("overview");
-    if (!refreshInterval) refreshInterval = setInterval(update, 20000);
+    await pollShowcase();
+    if (!refreshInterval) refreshInterval = setInterval(update, 14000);
+    if (!demoPoll) demoPoll = setInterval(pollShowcase, 1000);
   });
   $("lock-console").addEventListener("click", () => {
     viewerToken = null;
@@ -226,13 +320,16 @@
     $("gate").hidden = false;
     if (refreshInterval) clearInterval(refreshInterval);
     refreshInterval = null;
+    if (demoPoll) clearInterval(demoPoll);
+    demoPoll = null;
     $("viewer-token").focus();
   });
   $("refresh").addEventListener("click", update);
   document.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-view],button[data-copy]");
+    const button = event.target.closest("button[data-view],button[data-copy],button[data-start]");
     if (!button) return;
     if (button.dataset.view) setView(button.dataset.view);
     if (button.dataset.copy) copyCommand(button.dataset.copy);
+    if (button.dataset.start) startDemo(button.dataset.start);
   });
 })();
