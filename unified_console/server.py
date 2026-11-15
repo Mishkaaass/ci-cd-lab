@@ -1,9 +1,9 @@
-"""Unified OpsBoard console. Local-only, read-only, no privileged web actions.
+"""Unified OpsBoard console: local viewer and opt-in guided lab requests.
 
-The Docker and GitOps deployments retain separate security boundaries. This
-service observes them through loopback HTTP and a pinned, read-only kubectl
-context. It never opens the Docker socket, executes a deployment or changes
-Kubernetes resources.
+The unprivileged web server observes Docker, Kubernetes and GitHub. Normally it
+is read-only. During an explicitly started, local showcase it can enqueue one
+of three fixed requests to an independent foreground supervisor. The web server
+never opens a Docker socket, executes a deployment, or changes Kubernetes.
 """
 
 from __future__ import annotations
@@ -376,7 +376,9 @@ def github_state() -> dict:
     names = []
     if isinstance(jobs, dict) and isinstance(jobs.get("jobs"), list):
         for job in jobs["jobs"]:
-            if isinstance(job, dict) and str(job.get("name", "")).startswith("CI/"):
+            # Job names returned by GitHub are plain names (e.g. "Python tests")
+            # and must not be silently hidden behind a hypothetical "CI/" prefix.
+            if isinstance(job, dict) and _safe_text(job.get("name"), 64):
                 names.append(
                     {
                         "name": _safe_text(job.get("name"), 64),
@@ -395,6 +397,9 @@ def github_state() -> dict:
         "conclusion": _safe_text(run.get("conclusion") or run.get("status"), 32),
         "sha": compact_sha(run.get("head_sha")),
         "url": url,
+        "jobs_available": (
+            isinstance(jobs, dict) and isinstance(jobs.get("jobs"), list)
+        ),
         "jobs": names[:12],
     }
 
@@ -450,10 +455,7 @@ class Handler(BaseHTTPRequestHandler):
             "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
         )
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header(
-            "Content-Security-Policy",
-            CONTENT_SECURITY_POLICY,
-        )
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         self.wfile.write(body)
 
@@ -461,34 +463,123 @@ class Handler(BaseHTTPRequestHandler):
         data = json.dumps({"error": message}, separators=(",", ":")).encode("utf-8")
         self.respond(status, data, "application/json; charset=utf-8")
 
-    def do_POST(self) -> None:  # noqa: N802
-        self.error(HTTPStatus.METHOD_NOT_ALLOWED, "This console is read-only")
-
-    def do_GET(self) -> None:  # noqa: N802
-        actual_port = self.server.server_address[1]
+    def check_origin_and_host(self) -> bool:
+        port = self.server.server_address[1]
         if self.headers.get("Host", "") not in (
-            f"127.0.0.1:{actual_port}",
-            f"localhost:{actual_port}",
+            f"127.0.0.1:{port}",
+            f"localhost:{port}",
         ):
             self.error(HTTPStatus.BAD_REQUEST, "Invalid host")
-            return
+            return False
         origin = self.headers.get("Origin")
         if origin and origin not in (
-            f"http://127.0.0.1:{actual_port}",
-            f"http://localhost:{actual_port}",
+            f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
         ):
             self.error(HTTPStatus.FORBIDDEN, "Invalid origin")
+            return False
+        return True
+
+    def authenticated(self) -> bool:
+        header = self.headers.get("Authorization", "")
+        if not header.startswith("Bearer ") or not hmac.compare_digest(
+            header[7:], self.server.viewer_token
+        ):
+            self.error(HTTPStatus.UNAUTHORIZED, "Viewer token required")
+            return False
+        return True
+
+    def showcase_status(self) -> dict:
+        # Import lazily: the runner imports this module for existing helpers.
+        from unified_console import showcase
+
+        directory = self.server.showcase_directory
+        if directory is None:
+            return {
+                "enabled": False,
+                "status": "offline",
+                "steps": [],
+                "summary": ("Open scripts/showcase.sh to enable guided local drills"),
+            }
+        value = showcase.read_json(directory / "status.json")
+        if value is None:
+            return {
+                "enabled": False,
+                "status": "offline",
+                "steps": [],
+                "summary": "Local demo supervisor is not responding",
+            }
+        return value
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path != "/api/showcase/start":
+            self.error(HTTPStatus.METHOD_NOT_ALLOWED, "Unsupported operation")
+            return
+        if not self.check_origin_and_host() or not self.authenticated():
+            self.close_connection = True
+            return
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
+        if content_type != "application/json":
+            self.error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Expected application/json")
+            self.close_connection = True
+            return
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            length = 0
+        if not 1 <= length <= 128:
+            self.error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Invalid request size")
+            self.close_connection = True
+            return
+        try:
+            payload = json.loads(self.rfile.read(length))
+        except UnicodeError, ValueError:
+            self.error(HTTPStatus.BAD_REQUEST, "Invalid JSON")
+            return
+        action = payload.get("action") if isinstance(payload, dict) else None
+        if action not in ("all", "docker", "gitops"):
+            self.error(HTTPStatus.BAD_REQUEST, "Unknown demo action")
+            return
+
+        directory = self.server.showcase_directory
+        status = self.showcase_status()
+        if directory is None or status.get("enabled") is not True:
+            self.error(HTTPStatus.FORBIDDEN, "Demo operator is not enabled")
+            return
+        if status.get("status") in ("queued", "running"):
+            self.error(HTTPStatus.CONFLICT, "Demo already running")
+            return
+        request_file = directory / "request.json"
+        try:
+            fd = os.open(
+                request_file,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                0o600,
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump({"action": action}, handle)
+        except FileExistsError:
+            self.error(HTTPStatus.CONFLICT, "Demo request already queued")
+            return
+        except OSError:
+            self.error(HTTPStatus.SERVICE_UNAVAILABLE, "Demo queue unavailable")
+            return
+        self.respond(
+            HTTPStatus.ACCEPTED, b'{"queued":true}', "application/json; charset=utf-8"
+        )
+
+    def do_GET(self) -> None:  # noqa: N802
+        if not self.check_origin_and_host():
             return
         path = self.path
-        if path == "/api/overview":
-            authorization = self.headers.get("Authorization", "")
-            if not authorization.startswith("Bearer ") or not hmac.compare_digest(
-                authorization[7:], self.server.viewer_token
-            ):  # type: ignore[attr-defined]
-                self.error(HTTPStatus.UNAUTHORIZED, "Viewer token required")
+        if path in ("/api/overview", "/api/showcase/status"):
+            if not self.authenticated():
                 return
             try:
-                payload = json.dumps(snapshot(), separators=(",", ":")).encode("utf-8")
+                result = (
+                    snapshot() if path == "/api/overview" else self.showcase_status()
+                )
+                payload = json.dumps(result, separators=(",", ":")).encode("utf-8")
             except Exception:
                 self.error(
                     HTTPStatus.SERVICE_UNAVAILABLE, "Status temporarily unavailable"
@@ -510,8 +601,14 @@ class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address: tuple[str, int], token: str):
+    def __init__(
+        self,
+        address: tuple[str, int],
+        token: str,
+        showcase_directory: Path | None = None,
+    ):
         self.viewer_token = token
+        self.showcase_directory = showcase_directory
         super().__init__(address, Handler)
 
 
@@ -538,10 +635,17 @@ def main() -> int:
         print("GitHub CLI:", "found" if find_command("gh") else "missing")
         return 0
     try:
-        with LocalServer(("127.0.0.1", args.port), token) as server:
+        demo_directory = None
+        if os.environ.get("OPSBOARD_SHOWCASE_DIR"):
+            from unified_console import showcase
+
+            demo_directory = showcase.private_directory(
+                Path(os.environ["OPSBOARD_SHOWCASE_DIR"])
+            )
+        with LocalServer(("127.0.0.1", args.port), token, demo_directory) as server:
             print(f"OpsBoard unified: http://127.0.0.1:{args.port}/")
             print(f"Viewer token (private local file): {TOKEN_FILE}")
-            print("Read-only. Ctrl+C to stop. No Docker or Kubernetes changes.")
+            print("Local viewer. Privileged operations are not exposed to HTTP.")
             server.serve_forever(poll_interval=0.4)
     except OSError as exc:
         print(f"Cannot bind local port {args.port}: {exc}", file=sys.stderr)
