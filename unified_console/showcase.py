@@ -308,7 +308,11 @@ def parse_drill_line(progress: Progress, line: str, track: str) -> None:
 
 
 def find_existing_docker_root() -> Path:
-    """Reuse the user's already verified demo1 checkout when it owns 8080."""
+    """Keep the same dedicated Compose project even when its proxy is stopped.
+
+    Port 8080 alone is not proof of project identity. The dedicated worktree is
+    reused first, and its service ownership is verified by Compose later.
+    """
     candidates = sorted(
         (server.STATE / "opsboard-project1-finish/checkouts").glob(
             "demo1-*/scripts/reviewer.sh"
@@ -318,13 +322,7 @@ def find_existing_docker_root() -> Path:
     for script in candidates:
         root = script.parent.parent
         if (root / "scripts/lab.sh").is_file() and (root / "compose.yml").is_file():
-            try:
-                with urlopen("http://127.0.0.1:8080/version", timeout=0.6) as response:
-                    live = json.load(response)
-                if isinstance(live, dict) and live.get("version"):
-                    return root
-            except OSError, URLError, ValueError:
-                pass
+            return root
     return ROOT
 
 
@@ -554,10 +552,146 @@ def start_legacy_api(docker_root: Path, state: Path) -> subprocess.Popen | None:
     return child
 
 
+REQUIRED_DOCKER_SERVICES = frozenset({"db", "demo-blue", "demo-green", "nginx"})
+
+
+def compose_services_ready(docker_root: Path) -> bool:
+    """Verify this Compose project's containers, not merely a listening port.
+
+    `sudo -n` never prompts from an unattended health check. Both JSON-array
+    and line-delimited Compose v2 output formats are accepted.
+    """
+    if not (docker_root / "compose.yml").is_file():
+        return False
+    try:
+        info = subprocess.run(
+            ["docker", "info"],
+            cwd=docker_root,
+            env=command_env(),
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        prefix = ["docker"] if info.returncode == 0 else ["sudo", "-n", "docker"]
+        result = subprocess.run(
+            [*prefix, "compose", "ps", "--all", "--format", "json"],
+            cwd=docker_root,
+            env=command_env(),
+            capture_output=True,
+            timeout=12,
+            check=False,
+        )
+        if result.returncode or not 0 < len(result.stdout) < 64_000:
+            return False
+        source = result.stdout.decode("utf-8")
+        try:
+            parsed = json.loads(source)
+            rows = parsed if isinstance(parsed, list) else [parsed]
+        except json.JSONDecodeError:
+            rows = [json.loads(line) for line in source.splitlines() if line.strip()]
+        states = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                return False
+            service = row.get("Service")
+            if service not in REQUIRED_DOCKER_SERVICES:
+                continue
+            if service in states:
+                return False
+            running = str(row.get("State", "")).lower() == "running"
+            health = str(row.get("Health", "")).lower()
+            healthy = (
+                health == "healthy" if service != "nginx" else health in ("", "healthy")
+            )
+            states[service] = running and healthy
+        return len(states) == len(REQUIRED_DOCKER_SERVICES) and all(states.values())
+    except OSError, ValueError, UnicodeError, subprocess.TimeoutExpired:
+        return False
+
+
+def docker_lab_ready(docker_root: Path) -> bool:
+    """Compose readiness plus *real* loopback proxy readiness and identity."""
+    if not compose_services_ready(docker_root):
+        return False
+    try:
+        with urlopen("http://127.0.0.1:8080/ready", timeout=2) as response:
+            if response.status != 200:
+                return False
+        with urlopen("http://127.0.0.1:8080/version", timeout=2) as response:
+            if response.status != 200:
+                return False
+            live = json.load(response)
+        return (
+            isinstance(live, dict)
+            and bool(live.get("version"))
+            and bool(live.get("git_sha"))
+            and live.get("mode") == "healthy"
+        )
+    except OSError, URLError, ValueError, TypeError:
+        return False
+
+
+def ensure_docker_lab(docker_root: Path, progress: Progress) -> bool:
+    """Fail-closed, idempotent preparation before the startup and every drill.
+
+    Repair is limited to `scripts/lab.sh demo` from the selected local checkout.
+    No arbitrary browser command, volume deletion or context switch is allowed.
+    """
+    if not authorized_for_docker(progress):
+        progress.note("docker", "Docker authorization is required", "error")
+        return False
+    if docker_lab_ready(docker_root):
+        progress.note(
+            "docker", "Four Compose services and live proxy verified", "success"
+        )
+        return True
+    progress.note(
+        "docker",
+        "Docker lab incomplete: preparing required Compose services",
+        "info",
+    )
+    progress.terminal(
+        "docker",
+        "Checking db, demo-blue, demo-green and nginx",
+        kind="notice",
+    )
+    progress.terminal("docker", "$ bash scripts/lab.sh demo", kind="command")
+    print("Docker lab incomplete. Starting only the local Compose demo...", flush=True)
+    code = run_command(
+        ["bash", "scripts/lab.sh", "demo"], docker_root, 300, command_env()
+    )
+    if code != 0:
+        progress.note("docker", "Local Docker lab startup failed", "error")
+        progress.terminal(
+            "docker",
+            "Docker preparation failed; inspect launcher terminal",
+            kind="error",
+        )
+        return False
+    # Containers commonly report `health: starting` immediately after Compose up.
+    for _ in range(40):
+        if docker_lab_ready(docker_root):
+            progress.note(
+                "docker",
+                "All four Compose services and live proxy ready",
+                "success",
+            )
+            progress.terminal("docker", "Docker readiness verified", kind="notice")
+            return True
+        time.sleep(1)
+    progress.note("docker", "Docker readiness check timed out", "error")
+    progress.terminal(
+        "docker",
+        "Compose startup finished but required services are not healthy",
+        kind="error",
+    )
+    return False
+
+
 def prepare_labs(docker_root: Path, progress: Progress) -> None:
-    # Run only after the local UI starts, so any sudo prompt is visible there.
+    # UI is already listening. A sudo request is published before prompting.
     progress.data["status"] = "preparing"
-    progress.data["summary"] = "Preparing local demo services"
+    progress.data["summary"] = "Checking local Docker and GitOps prerequisites"
     progress.publish()
     progress.terminal(
         "system",
@@ -565,35 +699,12 @@ def prepare_labs(docker_root: Path, progress: Progress) -> None:
         kind="notice",
     )
     print("Preparing local demonstration (volumes preserved)...", flush=True)
-    if not socket_open(8080):
-        progress.terminal("docker", "$ bash scripts/lab.sh demo", kind="command")
-        if not authorized_for_docker(progress):
-            progress.note("docker", "Local Docker lab unavailable", "error")
-        else:
-            code = run_command(
-                ["bash", "scripts/lab.sh", "demo"], docker_root, 300, command_env()
-            )
-            progress.note(
-                "docker",
-                "Docker lab started"
-                if code == 0
-                else "Docker lab startup needs attention",
-                "success" if code == 0 else "error",
-            )
-            progress.terminal(
-                "docker",
-                "Docker lab ready" if code == 0 else "Docker lab needs attention",
-                kind="notice",
-            )
-    else:
-        progress.note("docker", "Existing Docker lab reused", "success")
-        progress.terminal(
-            "docker",
-            "Existing Docker lab detected on 127.0.0.1:8080",
-            kind="notice",
-        )
-    # Check first; a new GitOps cluster is never created by a GET or a web action.
+    docker_ok = ensure_docker_lab(docker_root, progress)
+
+    # The dedicated cluster is never changed by an ordinary dashboard GET.
+    gitops_ok = False
     if server.KCFG.is_file():
+        gitops_ok = True
         progress.note("gitops", "Dedicated kind kubeconfig detected", "success")
         progress.terminal(
             "gitops",
@@ -607,19 +718,32 @@ def prepare_labs(docker_root: Path, progress: Progress) -> None:
         code = run_command(
             ["bash", "scripts/gitops-demo.sh", "up"], ROOT, 900, command_env()
         )
+        gitops_ok = code == 0 and server.KCFG.is_file()
         progress.note(
             "gitops",
-            "Dedicated GitOps lab ready"
-            if code == 0
+            "Dedicated GitOps lab initialized"
+            if gitops_ok
             else "GitOps initialization needs attention",
-            "success" if code == 0 else "error",
+            "success" if gitops_ok else "error",
         )
     else:
-        progress.note("gitops", "GitOps prerequisites unavailable", "info")
-    if progress.data.get("attention") is None and progress.data["status"] != "failed":
+        progress.note("gitops", "GitOps tools are not installed", "info")
+    # Never show a blanket Ready state while the Docker database is missing.
+    if docker_ok and gitops_ok:
         progress.data["status"] = "idle"
-        progress.data["summary"] = "Ready. Choose a guarded demonstration above."
-        progress.publish()
+        progress.data["summary"] = "Docker and GitOps ready. Run the guided demo."
+    elif docker_ok:
+        progress.data["status"] = "idle"
+        progress.data["summary"] = (
+            "Docker ready. GitOps unavailable; check the local cluster."
+        )
+    else:
+        progress.data["status"] = "failed"
+        progress.data["summary"] = (
+            "Docker lab not ready. See the launcher terminal; retry the demo "
+            "after the prerequisites are fixed."
+        )
+    progress.publish()
 
 
 def terminate(child: subprocess.Popen | None) -> None:
@@ -784,7 +908,12 @@ def run() -> int:
                         progress.data["status"] = "running"
                         progress.data["summary"] = f"Executing {sub.upper()} lab drill"
                         progress.publish()
-                        ok = run_drill(sub, progress, docker_root)
+                        if sub == "docker":
+                            ok = ensure_docker_lab(docker_root, progress)
+                            if ok:
+                                ok = run_drill(sub, progress, docker_root)
+                        else:
+                            ok = run_drill(sub, progress, docker_root)
                         outcomes.append(ok)
                     if all(outcomes):
                         progress.finish(
