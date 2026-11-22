@@ -1,5 +1,7 @@
 # OpsBoard — CI/CD & GitOps Control Center
 
+*Developed by Moshe Bogo*
+
 [![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
 
 **One local interface. Two real recovery drills. Seven CI security and quality gates.**
@@ -31,6 +33,10 @@ This command reuses an existing local Docker lab when available or prepares the 
 ```bash
 cat ~/.config/ci-cd-lab/unified-console/viewer.token
 ```
+
+**What if it asks for a password?** The UI opens **before** the local lab is prepared. An amber **Action required** banner appears if Docker needs `sudo`. Return to the **same terminal** running `bash scripts/showcase.sh` and type your Linux password there (characters do not appear). **Never type a sudo password into the browser.** The UI resumes after authorization.
+
+**Behind the scenes:** The **Live terminal** pane displays selected, sanitized lines from the real scripts: readiness, Nginx validation, traffic switching and rollback. It is **read-only** and deliberately hides arbitrary process output and secrets. The verified event timeline persists after rollback.
 
 **3. Click _Live demo → Run full showcase_.** Two *real*, predefined tests execute through the foreground local supervisor. The screen retains the event timeline, so you can see the brief **Blue → Green → Blue** transition **after** the drill completes. It also records the Kubernetes **1 → 2 → 1** reconciliation. Click either individual drill to repeat just one.
 
