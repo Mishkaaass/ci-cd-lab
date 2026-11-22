@@ -22,7 +22,7 @@ OpsBoard answers three practical questions:
 
 The **Unified Console** displays live status, a persistent evidence timeline, **Live terminal** output and real GitHub Actions results. Docker and Kubernetes follow **separate paths**: they are independent demonstrations, not two copies of the same application deployment.
 
-> **Scope:** Local Linux lab only; not an AWS/EKS or internet-facing production environment. CI publishing a scanned container to GHCR **does not automatically deploy it to Kubernetes**. Kubernetes uses an independently reviewed, digest-pinned GitOps manifest.
+> **Scope:** Local Linux lab, also supported from Windows through Ubuntu WSL 2 + Docker Desktop; not an AWS/EKS or internet-facing production environment. CI publishing a scanned container to GHCR **does not automatically deploy it to Kubernetes**. Kubernetes uses an independently reviewed, digest-pinned GitOps manifest.
 
 ## 5-minute recruiter demo — start here
 
@@ -59,6 +59,18 @@ Paste the token into **Unlock**. Do not post it in screenshots, issues or chat. 
 Want to run only one test? Choose the separate **Docker** or **GitOps** action in Live Demo. To stop the local launcher, press `Ctrl+C` in its terminal; Docker volumes, kind cluster and PVC are preserved.
 
 **Viewer-only mode:** `bash scripts/unified-console.sh serve` opens the interface without enabling the guided actions. For a manual advanced drill, see `bash scripts/reviewer.sh drill` and `bash scripts/gitops-demo.sh drift-test` below.
+
+## Windows — WSL 2 + Docker Desktop
+
+On Windows 10/11, run the **same Linux-based live demo** through Ubuntu WSL 2. First install [WSL 2 + Ubuntu](https://learn.microsoft.com/en-us/windows/wsl/install) and [Docker Desktop](https://docs.docker.com/desktop/features/wsl/) with WSL Integration enabled for Ubuntu. Open PowerShell **inside this repository**:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-showcase.ps1
+```
+
+The launcher verifies Docker Desktop, sets up Python 3.14 and the Kubernetes tools **inside Ubuntu**, then starts the local console. Open `http://127.0.0.1:18002/` in Windows and click **Live Demo → Run full showcase**. Follow the terminal prompts for any first-time Ubuntu package installation or `sudo`; **never enter passwords in the browser**. Windows setup may take longer than five minutes; no native Windows container support is claimed.
+
+[Step-by-step Windows setup, Viewer token and troubleshooting](docs/windows.md).
 
 ## Architecture in three small diagrams
 
