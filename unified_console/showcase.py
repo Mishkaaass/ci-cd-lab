@@ -28,6 +28,60 @@ ROOT = Path(__file__).resolve().parent.parent
 STATE = server.STATE / "opsboard-showcase"
 MAX_EVENTS = 90
 ACTIONS = frozenset({"all", "docker", "gitops"})
+MAX_TERMINAL_ROWS = 125
+
+
+def safe_terminal_output(track: str, line: str) -> str | None:
+    """Expose known command output only, never arbitrary process stdout."""
+    import re
+
+    value = line.strip()
+    if not value or len(value) > 190 or any(ord(c) < 32 for c in value):
+        return None
+    if track == "docker":
+        fixed = {
+            "[1/3] Broken candidate: failure is expected",
+            "[2/3] Healthy candidate: validated before switching",
+            "[3/3] Rollback to original healthy slot",
+            "Candidate is READY.",
+            "PASS: broken candidate rejected; production release unchanged",
+            "PASS: production switched blue -> green",
+            "PASS: production switched green -> blue",
+            "PASS: broken gate, healthy rollout, exact rollback identity",
+            "Candidate failed readiness checks.",
+            "Production traffic was NOT changed.",
+            "Deployment history recorded.",
+            "nginx: the configuration file /etc/nginx/nginx.conf syntax is ok",
+            "nginx: configuration file /etc/nginx/nginx.conf test is successful",
+        }
+        if value in fixed:
+            return value
+        step = (
+            r"OPSBOARD_STEP\|(?:running|success|failed)\|"
+            r"(?:Candidate selected|Container started|Readiness check|"
+            r"Release identity verified|Nginx configuration validated|"
+            r"Traffic switched|Production converged|Rollback target selected|"
+            r"Target readiness verified)"
+        )
+        checks = (
+            r"readiness attempt (?:[1-9]|1[0-5])/15 failed",
+            r"PASS: traffic switched to healthy release "
+            r"good-[0-9]{8,16}\|good[0-9]{8,16}",
+            r"Production verified after [1-9][0-9]? attempt\(s\):",
+            step,
+        )
+        if any(re.fullmatch(pattern, value) for pattern in checks):
+            return value
+    if track == "gitops":
+        fixed = {
+            "deployment.apps/opsboard scaled",
+            "PASS: real GitOps self-healing restored replicas=1",
+            "Temporarily scaling OpsBoard to 2 replicas. "
+            "Argo CD should restore Git's 1.",
+        }
+        if value in fixed:
+            return value
+    return None
 
 
 def timestamp() -> str:
@@ -87,6 +141,8 @@ def initial_status() -> dict:
         "finished_at": None,
         "summary": "Ready for a guided local demonstration",
         "steps": [],
+        "terminal": [],
+        "attention": None,
         "docker_phase": None,
         "gitops_phase": None,
         "updated_at": timestamp(),
@@ -130,6 +186,7 @@ class Progress:
             }
         )
         self.publish()
+        self.terminal("system", "$ Run predefined lab demonstration", kind="command")
         self.note(
             "system", "Guided run started", "info", "Using existing guarded lab scripts"
         )
@@ -143,6 +200,26 @@ class Progress:
             }
         )
         self.note("system", description, "success" if successful else "error")
+
+    def terminal(self, track: str, content: str, *, kind: str = "output") -> None:
+        # Static messages or syntactically allowlisted subprocess lines only.
+        # The web endpoint never receives a raw subprocess transcript.
+        self.data.setdefault("terminal", []).append(
+            {
+                "at": timestamp(),
+                "track": track,
+                "kind": kind,
+                "text": content[:190],
+            }
+        )
+        self.data["terminal"] = self.data["terminal"][-MAX_TERMINAL_ROWS:]
+        self.publish()
+
+    def attention(self, title: str | None = None, message: str = "") -> None:
+        self.data["attention"] = (
+            {"kind": "sudo", "title": title, "message": message} if title else None
+        )
+        self.publish()
 
 
 def parse_drill_line(progress: Progress, line: str, track: str) -> None:
@@ -275,7 +352,7 @@ def run_command(
 
 
 def authorized_for_docker(progress: Progress) -> bool:
-    # Probe silently; Docker information is not useful during reviewer onboarding.
+    """Explicit human authorization, with a visible, time-bounded UI prompt."""
     try:
         probe = subprocess.run(
             ["docker", "info"],
@@ -290,21 +367,61 @@ def authorized_for_docker(progress: Progress) -> bool:
             return True
     except OSError, subprocess.TimeoutExpired:
         pass
-    if not sys.stdin.isatty():
-        progress.note(
-            "system",
-            "Interactive terminal required for Docker authorization",
-            "error",
-        )
-        return False
     if run_command(["sudo", "-n", "-v"], ROOT, 4) == 0:
         return True
-    print(
-        "\nDocker requires sudo. Authorize in this terminal; "
-        "your password never enters the browser:",
-        flush=True,
+
+    title = "Action required: authorize Docker in the terminal"
+    message = (
+        "Return to the terminal running scripts/showcase.sh and enter your "
+        "sudo password there. Typed characters will not appear. "
+        "Never enter this password into the browser."
     )
-    return run_command(["sudo", "-v"], ROOT, 65) == 0
+    progress.data["status"] = "waiting_auth"
+    progress.data["summary"] = "Waiting for sudo authorization in the terminal"
+    progress.attention(title, message)
+    progress.terminal(
+        "system",
+        "AUTHORIZATION REQUIRED — check launcher terminal",
+        kind="notice",
+    )
+    print("\n" + "=" * 64, flush=True)
+    print("ACTION REQUIRED: Docker needs sudo authorization.", flush=True)
+    print("Type your password HERE (nothing appears as you type).", flush=True)
+    print("The browser never receives or stores your password.", flush=True)
+    print("=" * 64, flush=True)
+    if not sys.stdin.isatty():
+        progress.data["status"] = "failed"
+        progress.data["summary"] = "Interactive sudo terminal unavailable"
+        progress.attention(
+            "Interactive terminal required",
+            "Start bash scripts/showcase.sh in a real terminal "
+            "to authorize Docker; never enter passwords in this browser.",
+        )
+        progress.note("system", "An interactive terminal is required for sudo", "error")
+        return False
+    granted = run_command(["sudo", "-v"], ROOT, 120) == 0
+    progress.attention()
+    progress.data["status"] = (
+        "running"
+        if granted and progress.data.get("action")
+        else "preparing"
+        if granted
+        else "failed"
+    )
+    progress.data["summary"] = (
+        "Docker authorization granted"
+        if granted
+        else "Docker authorization was declined or timed out"
+    )
+    progress.terminal(
+        "system",
+        "Sudo authorization accepted"
+        if granted
+        else "Sudo authorization not completed",
+        kind="notice",
+    )
+    progress.publish()
+    return granted
 
 
 def run_drill(action: str, progress: Progress, docker_root: Path) -> bool:
@@ -323,9 +440,12 @@ def run_drill(action: str, progress: Progress, docker_root: Path) -> bool:
             progress.note("gitops", "Dedicated GitOps kubeconfig is missing", "error")
             return False
     progress.note(action, "Executing real guarded lab script", "info")
+    progress.terminal(action, "$ " + " ".join(argv), kind="command")
     print("\nRUN:", " ".join(argv), "from", cwd, flush=True)
     process = None
     try:
+        # The parent remains interactive for sudo; subprocess stdout is piped
+        # only to the terminal and to a strict, credential-free UI allowlist.
         process = subprocess.Popen(
             argv,
             cwd=cwd,
@@ -333,21 +453,48 @@ def run_drill(action: str, progress: Progress, docker_root: Path) -> bool:
             stdin=None,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            errors="replace",
+            bufsize=0,
         )
+        import selectors
+
         start = time.monotonic()
         assert process.stdout is not None
-        for line in process.stdout:
-            # Display original evidence only in the terminal; store allowlisted events.
-            print(line, end="", flush=True)
-            parse_drill_line(progress, line, action)
-            if time.monotonic() - start > deadline:
-                process.terminate()  # never kill Docker or Kubernetes resources
-                progress.note(action, "Drill exceeded its timeout", "error")
-                process.wait(timeout=8)
-                return False
+        pending = b""
+        eof = False
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while not eof:
+                if time.monotonic() - start > deadline:
+                    process.terminate()  # never delete or kill lab resources
+                    progress.note(action, "Drill exceeded its timeout", "error")
+                    progress.terminal(
+                        action, "Drill exceeded its time limit", kind="error"
+                    )
+                    process.wait(timeout=8)
+                    return False
+                for key, _ in selector.select(timeout=0.7):
+                    chunk = os.read(key.fileobj.fileno(), 4096)
+                    if not chunk:
+                        eof = True
+                        break
+                    pending += chunk
+                    if len(pending) > 64_000:
+                        pending = pending[-16_000:]
+                    while b"\n" in pending:
+                        raw, pending = pending.split(b"\n", 1)
+                        line = raw.decode("utf-8", errors="replace")
+                        print(line, flush=True)
+                        visible = safe_terminal_output(action, line)
+                        if visible is not None:
+                            progress.terminal(action, visible)
+                        parse_drill_line(progress, line, action)
+            if pending:
+                line = pending.decode("utf-8", errors="replace")
+                print(line, flush=True)
+                visible = safe_terminal_output(action, line)
+                if visible is not None:
+                    progress.terminal(action, visible)
+                parse_drill_line(progress, line, action)
         code = process.wait(timeout=8)
         expected = (
             progress.data["docker_phase"] == "complete"
@@ -408,8 +555,18 @@ def start_legacy_api(docker_root: Path, state: Path) -> subprocess.Popen | None:
 
 
 def prepare_labs(docker_root: Path, progress: Progress) -> None:
+    # Run only after the local UI starts, so any sudo prompt is visible there.
+    progress.data["status"] = "preparing"
+    progress.data["summary"] = "Preparing local demo services"
+    progress.publish()
+    progress.terminal(
+        "system",
+        "Preparing the local lab; existing volumes are preserved",
+        kind="notice",
+    )
     print("Preparing local demonstration (volumes preserved)...", flush=True)
     if not socket_open(8080):
+        progress.terminal("docker", "$ bash scripts/lab.sh demo", kind="command")
         if not authorized_for_docker(progress):
             progress.note("docker", "Local Docker lab unavailable", "error")
         else:
@@ -423,13 +580,29 @@ def prepare_labs(docker_root: Path, progress: Progress) -> None:
                 else "Docker lab startup needs attention",
                 "success" if code == 0 else "error",
             )
+            progress.terminal(
+                "docker",
+                "Docker lab ready" if code == 0 else "Docker lab needs attention",
+                kind="notice",
+            )
     else:
         progress.note("docker", "Existing Docker lab reused", "success")
+        progress.terminal(
+            "docker",
+            "Existing Docker lab detected on 127.0.0.1:8080",
+            kind="notice",
+        )
     # Check first; a new GitOps cluster is never created by a GET or a web action.
     if server.KCFG.is_file():
         progress.note("gitops", "Dedicated kind kubeconfig detected", "success")
+        progress.terminal(
+            "gitops",
+            "Dedicated kind cluster configuration detected",
+            kind="notice",
+        )
     elif server.find_command("kubectl") and server.find_command("kind"):
         progress.note("gitops", "Initializing the dedicated local kind lab", "info")
+        progress.terminal("gitops", "$ bash scripts/gitops-demo.sh up", kind="command")
         print("Creating only the dedicated kind-opsboard-review lab...", flush=True)
         code = run_command(
             ["bash", "scripts/gitops-demo.sh", "up"], ROOT, 900, command_env()
@@ -443,6 +616,10 @@ def prepare_labs(docker_root: Path, progress: Progress) -> None:
         )
     else:
         progress.note("gitops", "GitOps prerequisites unavailable", "info")
+    if progress.data.get("attention") is None and progress.data["status"] != "failed":
+        progress.data["status"] = "idle"
+        progress.data["summary"] = "Ready. Choose a guarded demonstration above."
+        progress.publish()
 
 
 def terminate(child: subprocess.Popen | None) -> None:
@@ -542,8 +719,9 @@ def run() -> int:
     progress = Progress(path / "status.json")
     docker_root = find_existing_docker_root()
     print("Docker lab checkout:", docker_root, flush=True)
-    prepare_labs(docker_root, progress)
-    api = start_legacy_api(docker_root, path)
+    # Start the browser BEFORE Docker/cluster preparation or any sudo prompt.
+    # It will now show Preparing / Waiting for sudo instead of appearing stuck.
+    api = None
     env = command_env()
     env["OPSBOARD_SHOWCASE_DIR"] = str(path)
     log = (path / "console.log").open("ab")
@@ -578,6 +756,9 @@ def run() -> int:
             "Only fixed local demo scripts can run; Ctrl+C stops the supervisor.\n",
             flush=True,
         )
+        progress.data["status"] = "preparing"
+        progress.data["summary"] = "Preparing the local lab; use this terminal for sudo"
+        progress.publish()
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             if shutil.which("xdg-open"):
                 subprocess.Popen(
@@ -586,6 +767,8 @@ def run() -> int:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
+        prepare_labs(docker_root, progress)
+        api = start_legacy_api(docker_root, path)
         while console.poll() is None:
             request_file = path / "request.json"
             request = read_json(request_file)
@@ -598,6 +781,9 @@ def run() -> int:
                     progress.begin(action)
                     outcomes = []
                     for sub in ["docker", "gitops"] if action == "all" else [action]:
+                        progress.data["status"] = "running"
+                        progress.data["summary"] = f"Executing {sub.upper()} lab drill"
+                        progress.publish()
                         ok = run_drill(sub, progress, docker_root)
                         outcomes.append(ok)
                     if all(outcomes):
@@ -613,8 +799,8 @@ def run() -> int:
         raise RuntimeError("Unified server stopped unexpectedly")
     except KeyboardInterrupt:
         print(
-            "\nStopping local servers; Docker containers, kind cluster"
-            " and PVC are preserved."
+            "\nStopping local servers; Docker containers, "
+            "kind cluster and PVC are preserved."
         )
         return 0
     except RuntimeError as exc:

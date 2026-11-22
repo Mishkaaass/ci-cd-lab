@@ -40,3 +40,13 @@ If port `18002` is already in use, stop the existing console using `Ctrl+C` in i
 GitHub Actions CI has seven required jobs. On a successful push to protected `main`, CD can build, scan, verify image digest, generate SBOM/provenance, publish to GHCR and update the mutable `latest` tag. Kubernetes receives a new app image **only after a separate reviewed manifest change**, pinned by immutable digest. Neither read-only observation nor the guided drills rewrite release tags or edit GitOps manifests.
 
 Stop the launcher with `Ctrl+C` to stop only the servers started by that launcher. Cluster and PVC remain. `bash scripts/gitops-demo.sh down --delete-my-lab` is destructive; do not run it for ordinary shutdown.
+
+## Live terminal, sudo and reviewability
+
+The **Live terminal** displays a small, read-only set of lines matched against explicit allowlisted output from the guarded scripts. It is **not** a shell, PTY or Docker console. Arbitrary stdout, tokens, passwords and sensitive paths are never forwarded to the browser. The interface polls a bounded, private JSON snapshot once a second.
+
+The web UI starts **before** Docker/kind preparation. If Docker needs interactive sudo, the UI enters `waiting_auth` and shows a clear amber banner. Enter the password only in the terminal running `bash scripts/showcase.sh`; nothing is entered over HTTP. A denied or timed-out prompt is reported as a failure.
+
+`Ctrl+C` stops the launcher and servers, while Compose volumes, kind resources and the PostgreSQL PVC are preserved.
+
+App header credit: **Developed by Moshe Bogo**.
