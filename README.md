@@ -2,21 +2,33 @@
 
 [![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
 
-**One local interface. Two real recovery drills. Seven CI security and quality gates.**
+**A working DevSecOps lab that proves releases can be delivered, rejected and recovered safely.** One local dashboard shows Docker deployments, Kubernetes reconciliation, real pipeline checks and a read-only live terminal.
 
-OpsBoard is a hands-on delivery lab: it **rejects an unhealthy Docker release, promotes a verified one and rolls back to the exact original**, while a separate Kubernetes environment proves **Argo CD self-healing** after configuration drift. The same screen shows release status, an evidence timeline, cluster health and actual GitHub Actions job results.
+*Developed by Moshe Bogo*
 
-![OpsBoard live demo interface — illustrative UI data](docs/assets/opsboard-showcase-preview.png)
+![OpsBoard interface preview](docs/assets/opsboard-showcase-preview.png)
 
-*Interface preview uses illustrative data; verified results come only from the live local drills and GitHub Actions.*
+*Preview data is illustrative. Live results are read from the actual local labs and GitHub Actions.*
 
-> **Scope:** An isolated local learning lab, not a public production system or an AWS/EKS deployment. Docker Blue/Green and Kubernetes GitOps follow **separate paths** with independent environments and credentials. Publishing a scanned image to GHCR **does not** automatically promote it to Kubernetes.
+## What does it do?
 
-## 5-minute recruiter demo
+OpsBoard answers three practical questions:
 
-Requires **Linux**, **Python 3.14** for the full Docker demo (Python 3.11+ for viewer-only mode), Docker Engine + Compose, and Git. Kubernetes needs `kind` and `kubectl`. `gh auth login` enables private GitHub Actions job details. First-time installation and cluster downloads can take longer than five minutes.
+| Question | What the lab demonstrates |
+|---|---|
+| **Can a bad release reach users?** | Docker Blue/Green checks the candidate's readiness, version and Git SHA. A broken candidate is **rejected** without switching traffic. |
+| **Can we deploy and recover safely?** | A healthy candidate is promoted through Nginx, then a verified **rollback** restores the exact original version and SHA. |
+| **Can infrastructure correct unexpected changes?** | Kubernetes + Argo CD detects replica **drift** (1 → 2) and restores the desired state from Git (→ 1). |
 
-**1. Start the lab and viewer (one terminal):**
+The **Unified Console** displays live status, a persistent evidence timeline, **Live terminal** output and real GitHub Actions results. Docker and Kubernetes follow **separate paths**: they are independent demonstrations, not two copies of the same application deployment.
+
+> **Scope:** Local Linux lab, also supported from Windows through Ubuntu WSL 2 + Docker Desktop; not an AWS/EKS or internet-facing production environment. CI publishing a scanned container to GHCR **does not automatically deploy it to Kubernetes**. Kubernetes uses an independently reviewed, digest-pinned GitOps manifest.
+
+## 5-minute recruiter demo — start here
+
+**Before you begin:** Linux, Git, Python **3.14**, Docker Engine and Docker Compose v2. For the Kubernetes drill, install `kind` and `kubectl`; GitHub CLI (`gh`) is recommended for detailed private CI results. Docker access may require your Linux `sudo` password. A first-time container build or cluster installation can take longer than five minutes.
+
+**1. Start everything in one terminal.** Run these three commands:
 
 ```bash
 git clone https://github.com/Mishkaaass/ci-cd-lab.git
@@ -24,101 +36,104 @@ cd ci-cd-lab
 bash scripts/showcase.sh
 ```
 
-This command reuses an existing local Docker lab when available or prepares the four Compose services without deleting volumes. It connects the Docker history API and opens the local viewer. With `kind` and `kubectl` installed, the launcher may also initialize its **dedicated** local GitOps cluster; this is an explicitly started lab, never an external cluster. If `sudo` is needed for Docker, authorization happens **in the terminal**, not in the browser. Leave this terminal running.
+Leave the terminal open. The launcher checks **all four Docker services** (`db`, `demo-blue`, `demo-green`, `nginx`) and the live proxy, not just whether port `8080` is open. If any service is missing or unhealthy, it prepares the lab automatically, verifies readiness, and preserves volumes. **No additional Docker commands or internal checkout paths are required.** If tools for GitOps are installed, it uses or prepares only the dedicated `kind-opsboard-review` cluster.
 
-**2. Open one URL:** [**http://127.0.0.1:18002/**](http://127.0.0.1:18002/). Unlock with the private token stored *on your own machine*:
+**2. Open [http://127.0.0.1:18002/](http://127.0.0.1:18002/)** on the same computer. Get your private Viewer token from a *second terminal*:
 
 ```bash
 cat ~/.config/ci-cd-lab/unified-console/viewer.token
 ```
 
-**3. Click _Live demo → Run full showcase_.** Two *real*, predefined tests execute through the foreground local supervisor. The screen retains the event timeline, so you can see the brief **Blue → Green → Blue** transition **after** the drill completes. It also records the Kubernetes **1 → 2 → 1** reconciliation. Click either individual drill to repeat just one.
+Paste the token into **Unlock**. Do not post it in screenshots, issues or chat. If **Action required: sudo** appears, enter your **Linux password in the original launcher terminal**, not in the browser. Nothing appears while you type; press Enter. The browser never receives the password.
 
-| What to inspect | What success actually proves |
+**3. Click `Live Demo` → `Run full showcase`.** The local supervisor runs two predefined, real drills. Watch the **Live Terminal** and timeline, then inspect the Docker, Kubernetes and Security panels. The terminal pane shows selected, sanitized command output; it is **not** a shell prompt and cannot run arbitrary commands.
+
+| During the demo | What you should see |
 |---|---|
-| **Docker / Blue–Green** | Broken candidate rejected; healthy candidate validated and promoted; rollback restores original version **and Git SHA** |
-| **Kubernetes / GitOps** | Argo CD `Synced / Healthy`, application `1/1`, PVC `Bound`, deliberate replica drift repaired by Git |
-| **Pipeline & security** | Real latest `main` GitHub Actions jobs, never invented green checks if the GitHub API is unavailable |
+| **Docker — broken candidate** | Readiness fails; Blue remains live. |
+| **Docker — healthy candidate** | Version/SHA and Nginx validation pass; production switches **Blue → Green**. |
+| **Docker — rollback** | Production returns **Green → Blue**, matching the original version and SHA. **Blue after completion is expected.** |
+| **Kubernetes — GitOps drift** | Argo CD restores replicas **1 → 2 → 1**, ending `Synced / Healthy`; PostgreSQL PVC remains `Bound`. |
+| **Security / CI** | Seven real job results when GitHub access is available; missing API data appears as **Unavailable**, never fabricated success. |
 
-**Without Docker permissions or the cluster?** `bash scripts/unified-console.sh serve` opens the same dashboard in **read-only** mode, showing only sources that are actually reachable. This mode cannot request live drills. Existing Docker tests can also be run manually with `bash scripts/reviewer.sh drill`; GitOps with `bash scripts/gitops-demo.sh drift-test`.
+Want to run only one test? Choose the separate **Docker** or **GitOps** action in Live Demo. To stop the local launcher, press `Ctrl+C` in its terminal; Docker volumes, kind cluster and PVC are preserved.
 
-## Architecture
+**Viewer-only mode:** `bash scripts/unified-console.sh serve` opens the interface without enabling the guided actions. For a manual advanced drill, see `bash scripts/reviewer.sh drill` and `bash scripts/gitops-demo.sh drift-test` below.
 
-**From code to reviewed, verified artifacts**
+## Windows — WSL 2 + Docker Desktop
+
+On Windows 10/11, run the **same Linux-based live demo** through Ubuntu WSL 2. First install [WSL 2 + Ubuntu](https://learn.microsoft.com/en-us/windows/wsl/install) and [Docker Desktop](https://docs.docker.com/desktop/features/wsl/) with WSL Integration enabled for Ubuntu. Open PowerShell **inside this repository**:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-showcase.ps1
+```
+
+The launcher verifies Docker Desktop, sets up Python 3.14 and the Kubernetes tools **inside Ubuntu**, then starts the local console. Open `http://127.0.0.1:18002/` in Windows and click **Live Demo → Run full showcase**. Follow the terminal prompts for any first-time Ubuntu package installation or `sudo`; **never enter passwords in the browser**. Windows setup may take longer than five minutes; no native Windows container support is claimed.
+
+[Step-by-step Windows setup, Viewer token and troubleshooting](docs/windows.md).
+
+## Architecture in three small diagrams
+
+**1. Software delivery and the two independent labs**
 
 ```mermaid
 flowchart LR
-  PR[Pull request] --> CI[Seven required CI jobs]
-  CI --> Main[Protected main]
-  Main --> CD[CD: scan, SBOM, provenance]
-  CD --> GHCR[Verified immutable GHCR digest]
-  GHCR -.->|reviewed GitOps manifest PR| Argo[Argo CD]
-  Argo --> K8s[Dedicated kind cluster]
+  PR[Pull request] --> CI[7 CI gates] --> Main[Protected main]
+  Main --> CD[CD: scan + SBOM + provenance] --> GHCR[Verified GHCR digest]
+  GHCR -.->|reviewed manifest PR| Argo[Argo CD] --> K8s[Dedicated kind cluster]
   Main -.->|separate local demo| Docker[Docker Blue/Green]
-  Docker --> Console[Unified OpsBoard]
-  K8s --> Console
+  Docker --> UI[Unified Console]
+  K8s --> UI
 ```
 
-**Docker release discipline**
+**2. Docker Blue/Green with safety gates**
 
 ```mermaid
 flowchart LR
-  CLI[Predefined guarded drill] --> Candidate[Inactive candidate]
-  Candidate --> Gate{Ready + version + SHA?}
-  Gate -->|Fail| Hold[Keep existing live release]
-  Gate -->|Pass| Switch[Validate Nginx + switch to Green]
-  Switch --> Rollback[Verify original Blue + exact rollback]
-  Rollback --> Timeline[Persist verified evidence timeline]
+  Candidate[Inactive candidate] --> Gate{Ready + version + SHA?}
+  Gate -->|Fail| Blue[Keep existing Blue]
+  Gate -->|Pass| Nginx[Validate Nginx + switch to Green]
+  Nginx --> Rollback[Verify original Blue + rollback]
+  Rollback --> Evidence[Live event timeline]
 ```
 
-**GitOps reconciliation**
+**3. Kubernetes desired-state recovery**
 
 ```mermaid
 flowchart LR
-  Git[Git: desired replicas = 1] --> Argo[Argo CD]
-  Argo --> Cluster[OpsBoard Deployment]
-  Drift[Guarded scale: 1 to 2] --> Cluster
-  Argo -->|self-heal| Cluster
-  Cluster --> DB[(PostgreSQL PVC)]
+  Git[Git: replicas = 1] --> Argo[Argo CD]
+  Drift[Demo sets replicas = 2] --> K8s[OpsBoard deployment]
+  Argo -->|self-heal to 1| K8s
+  K8s --> DB[(PostgreSQL PVC)]
 ```
 
-The displayed GitOps revision identifies the **manifest revision**; the application's running image can be an older, separately approved digest. Neither successful CI nor Argo CD sync proves a new image was promoted.
+**Important distinction:** A successful CI run publishes a verified artifact; it does **not** imply that artifact is currently running in Kubernetes. The Argo CD Git revision and the application image digest are different identities.
 
-## Security and responsibilities
+## Security, by design
 
-| Layer | What is enforced |
+- **Before merge:** Seven required CI gates cover Python tests, code quality, dependencies, secrets, containers, browser/API security and an isolated API attack scan. `main` is protected.
+- **Supply chain:** Gitleaks, dependency auditing, Trivy image policy, SBOM, provenance and immutable image digest verification. The `latest` tag is not the deployment identity.
+- **Release safety:** Readiness and exact release identity checks; Nginx configuration is validated before switching; rollback verifies the original deployment.
+- **Access:** Local `127.0.0.1` only; private Viewer token, content security policy (CSP), host/origin checks and no exposed Docker socket. The normal dashboard is read-only.
+- **Guided actions:** Explicit opt-in by running `scripts/showcase.sh`. While that trusted foreground supervisor runs, a valid local Viewer token may request only three fixed local lab actions (`all`, `docker`, `gitops`). The browser cannot supply shell commands or choose arbitrary Kubernetes targets. Use only on a trusted workstation.
+- **Boundaries:** `sudo` stays in the terminal. PostgreSQL PVC persistence is **not** a backup. This lab does not claim SSO, public TLS, high availability, production rollout or disaster-recovery certification.
+
+## If something doesn't work
+
+| Symptom | What to do |
 |---|---|
-| **Source** | Protected `main`, seven required CI jobs: Python tests, code quality, dependency, secret, container, browser/API, isolated attack scan |
-| **Supply chain** | Gitleaks, dependency checks, Trivy image policy, SBOM, provenance and published image digest verification |
-| **Release guard** | Readiness gate, exact version/SHA checks, Nginx config validation, bounded traffic change, verified rollback |
-| **GitOps** | Separate reviewed manifest promotion, digest-pinned workload, dedicated kubeconfig/context and Argo CD reconciliation |
-| **Viewer** | Local loopback binding (`127.0.0.1`), private `0600` token, no external scripts, CSP, restricted host/origin, no Docker socket exposure |
-| **Guided demo** | **Explicit opt-in** through `scripts/showcase.sh`; only three predefined actions (`all`, `docker`, `gitops`). Browser requests cannot supply shell commands, Docker flags, or Kubernetes targets. The unprivileged web process only queues requests; the separate foreground supervisor executes existing guarded scripts |
+| **`18002` does not open** | Keep `bash scripts/showcase.sh` running. Stop an older console occupying the port with `Ctrl+C` in **its own** terminal; then retry. |
+| **Waiting for a password** | Return to the launcher terminal and approve `sudo` there. Do not type a sudo password into the web UI. |
+| **Docker not ready** | The launcher checks all four Compose services and automatically repairs missing services. If it still fails, read the clear error in the **launcher terminal**; advanced diagnostics: `bash scripts/reviewer.sh doctor` |
+| **CI jobs unavailable** | Authenticate locally: `gh auth login` then `gh auth status`. Advanced API check: `gh api repos/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/runs?branch=main\&per_page=1`. API failure is unknown, not green. |
+| **Kubernetes unavailable** | Install `kind`/`kubectl` and check `bash scripts/gitops-demo.sh doctor`, `bash scripts/gitops-demo.sh status`; optional lab setup: `bash scripts/gitops-demo.sh up`. |
+| **Dashboard shows Blue after the test** | Correct: the demo deliberately **rolls back to Blue**. Read the event timeline to see Green's verified promotion. |
+| **History / port `18001` missing** | The launcher manages the Docker history API. For advanced troubleshooting: `bash scripts/reviewer.sh dashboard`; its output includes `Viewer token file:`. |
 
-**Trust boundary:** While the locally authorized showcase launcher is active, a valid local Viewer token can request the **fixed lab drills**. Do not enable this on a shared or untrusted workstation. Normal `unified-console.sh serve` remains read-only. No general-purpose Deploy, arbitrary command executor, public API, or remote admin endpoint is exposed. `sudo` is handled in the launcher's terminal, never passed through HTTP. If a prerequisite is unavailable, the interface reports it rather than claiming success.
+**Optional manual commands:** `bash scripts/reviewer.sh status`, `bash scripts/reviewer.sh tokens`, `bash scripts/reviewer.sh up`, `bash scripts/reviewer.sh drill`, `bash scripts/gitops-demo.sh drift-test`, `bash scripts/gitops-demo.sh ui` (Argo CD at `https://127.0.0.1:18080`) and `bash scripts/gitops-demo.sh app` (legacy OpsBoard at `http://127.0.0.1:18081/dashboard`). Argo CD uses a separate `admin` account and its `argocd-initial-admin-secret`; never treat it as the OpsBoard Viewer token.
 
-A green check means a declared test passed; it is **not** an enterprise security certification. `PVC Bound` means the volume is attached, not that backups exist. There is no production SSO, external HTTPS termination, HA or tested disaster recovery here.
+**Safe shutdown:** `Ctrl+C` stops the launcher; it **does not delete** Docker volumes, the Kubernetes cluster or PostgreSQL PVC. Do not run `docker compose down -v` or `bash scripts/gitops-demo.sh down --delete-my-lab` unless data loss is intentional.
 
-## Operations and troubleshooting
+**Details for engineers:** [Unified runbook](docs/unified-console.md) · [Docker walkthrough](docs/demo-docker-blue-green.md) · [GitOps walkthrough](docs/demo-kubernetes-argocd.md) · [GitOps runbook](docs/kubernetes-gitops.md) · [Security model](docs/security-lab.md) · [CI](.github/workflows/ci.yml) · [CD](.github/workflows/cd.yml) · [Releases](https://github.com/Mishkaaass/ci-cd-lab/releases)
 
-| Symptom | Action |
-|---|---|
-| **Port 18002 occupied** | Stop the *previous* console with `Ctrl+C` in its terminal, then rerun `bash scripts/showcase.sh` |
-| **Docker offline** | `bash scripts/reviewer.sh doctor` → `bash scripts/reviewer.sh up` → check [live version](http://127.0.0.1:8080/version) |
-| **History missing / port 18001** | The showcase launcher starts `bash scripts/reviewer.sh dashboard` if needed; it reads the separate private `Viewer token file:`. Manual fallback: start that command in another terminal |
-| **GitOps offline** | `bash scripts/gitops-demo.sh doctor` → `bash scripts/gitops-demo.sh up` → `bash scripts/gitops-demo.sh status`; only the dedicated `kind-opsboard-review` cluster is used |
-| **CI job data unavailable** | `gh auth status` then `gh api repos/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/runs?branch=main\&per_page=1`; absent data is not interpreted as passing |
-| **Drill shows Blue after success** | Expected: `drill` ends with an exact **rollback to Blue**. Open **Live demo** for the retained Green transition |
-| **Viewer cannot click Run** | Start `bash scripts/showcase.sh` instead of the stand-alone viewer; the foreground terminal must remain open |
-
-**Manual tests**, if you prefer scripts: `bash scripts/reviewer.sh status`, `bash scripts/reviewer.sh drill`, `bash scripts/gitops-demo.sh status`, `bash scripts/gitops-demo.sh drift-test`.
-
-**Native Argo CD UI (optional):** `bash scripts/gitops-demo.sh ui` opens **https://127.0.0.1:18080**; login is `admin`, password is the `argocd-initial-admin-secret` inside the dedicated cluster. The optional legacy Kubernetes OpsBoard (`bash scripts/gitops-demo.sh app`, port `18081`) has another Viewer token at `opsboard-gitops-review/auth/viewer.token`. Do not paste secrets into issues or screenshots.
-
-**Optional legacy interfaces:** Docker history: `http://127.0.0.1:18001/dashboard`; Kubernetes app: `http://127.0.0.1:18081/dashboard`. Find the Docker token file with `bash scripts/reviewer.sh tokens`. The unified console remains the default entry point.
-
-**Stop safely:** `Ctrl+C` in the showcase terminal stops only the servers it started. Docker containers, kind resources and PostgreSQL PVCs are **preserved**. Do not run `docker compose down -v` or `bash scripts/gitops-demo.sh down --delete-my-lab` unless you explicitly intend data loss.
-
-**Documentation:** [Guided demo operations](docs/unified-console.md) · [Docker](docs/demo-docker-blue-green.md) · [Kubernetes GitOps](docs/demo-kubernetes-argocd.md) · [GitOps runbook](docs/kubernetes-gitops.md) · [Security](docs/security-lab.md) · [CI](.github/workflows/ci.yml) · [CD](.github/workflows/cd.yml).
-
-**Release policy:** Existing release tags and pinned Kubernetes image digests are never rewritten by this work. Merging a new commit to `main` may trigger the existing CD pipeline and update the mutable `latest` image tag; GitOps image promotion remains separate and reviewed.
+**Release policy:** Existing release tags and pinned Kubernetes images are not rewritten by this documentation change. A merge into `main` may still run the existing CD and update the mutable `latest` tag.

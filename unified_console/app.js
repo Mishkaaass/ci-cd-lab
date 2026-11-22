@@ -8,6 +8,8 @@
   let toastTimeout = null;
   const pages = new Set(["overview", "docker", "kubernetes", "security", "showcase", "runbook"]);
   let showcaseActive = false;
+  let terminalSignature = "";
+  let latestTerminal = [];
   let demoPoll = null;
 
   function setText(id, value, empty = "—") {
@@ -170,15 +172,61 @@
     }
     setText("footer-status", docker.healthy && kubeHealthy ? "TWO LABS OBSERVED" : "PARTIAL OPERATIONAL VISIBILITY");
   }
+  function renderTerminal(rows, active) {
+    const list = Array.isArray(rows) ? rows.slice(-125) : [];
+    const panel = $("showcase-terminal-output");
+    const target = $("showcase-terminal-lines");
+    const signature = JSON.stringify(list);
+    $("terminal-live-dot").classList.toggle("active", active);
+    $("terminal-line-count").textContent = `${list.length} lines`;
+    $("terminal-copy").disabled = !list.length;
+    latestTerminal = list;
+    if (signature === terminalSignature) return;
+    const follow = panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 48;
+    terminalSignature = signature;
+    target.replaceChildren();
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.className = "terminal-empty";
+      empty.textContent = "Waiting for a guarded lab run. Output appears here live.";
+      target.append(empty);
+      return;
+    }
+    list.forEach((entry) => {
+      if (!entry || typeof entry.text !== "string") return;
+      const line = document.createElement("div");
+      line.className = "terminal-line " + (["notice", "command", "error"].includes(entry.kind) ? entry.kind : "output");
+      const ts = document.createElement("time");
+      const date = new Date(entry.at);
+      ts.textContent = Number.isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+      const label = document.createElement("span");
+      label.className = "terminal-track";
+      label.textContent = ["docker", "gitops"].includes(entry.track) ? entry.track.toUpperCase() : "SYS";
+      const text = document.createElement("span");
+      text.className = "terminal-text";
+      text.textContent = entry.text;
+      line.append(ts, label, text);
+      target.append(line);
+    });
+    if (follow) panel.scrollTop = panel.scrollHeight;
+  }
+
   function renderShowcase(status) {
     const enabled = Boolean(status.enabled);
     const state = String(status.status || "offline");
-    showcaseActive = state === "queued" || state === "running";
+    showcaseActive = ["queued", "running", "preparing", "waiting_auth"].includes(state);
     const light = $("showcase-light");
     light.className = "showcase-light" + (showcaseActive ? " busy" : state === "failed" ? " bad" : enabled ? " live" : "");
-    const labels = { idle: "Ready to demonstrate", queued: "Queued", running: "Live test running", passed: "Verified run complete", failed: "Attention required", offline: "Viewer-only session" };
+    const labels = { idle: "Ready to demonstrate", queued: "Queued", preparing: "Preparing local services", waiting_auth: "Waiting for terminal authorization", running: "Live test running", passed: "Verified run complete", failed: "Attention required", offline: "Viewer-only session" };
     setText("showcase-state", labels[state] || state.toUpperCase());
     setText("showcase-summary", status.summary || (enabled ? "Click to begin" : "Start scripts/showcase.sh in a terminal to enable guided drills."));
+    const notice = status.attention && status.attention.kind === "sudo" ? status.attention : null;
+    $("showcase-attention").hidden = !notice;
+    if (notice) {
+      setText("showcase-attention-title", notice.title || "Authorize Docker in the terminal");
+      setText("showcase-attention-message", notice.message || "Return to the terminal running scripts/showcase.sh.");
+    }
+    renderTerminal(status.terminal, showcaseActive);
     const phases = {
       broken: "Broken candidate test", blocked: "Broken release blocked", healthy: "Validating new release",
       verified: "Version and SHA verified", green: "GREEN: live traffic", blue: "Rollback: BLUE restored", complete: "Rollback verified",
@@ -323,6 +371,16 @@
     if (demoPoll) clearInterval(demoPoll);
     demoPoll = null;
     $("viewer-token").focus();
+  });
+  $("terminal-copy").addEventListener("click", async () => {
+    const copy = latestTerminal.map((x) => `${x.at || ""} [${x.track || "system"}] ${x.text || ""}`).join("\n");
+    if (!copy) return;
+    try {
+      await navigator.clipboard.writeText(copy);
+      toast("Sanitized terminal output copied");
+    } catch {
+      toast("Copy unavailable; select the terminal text instead");
+    }
   });
   $("refresh").addEventListener("click", update);
   document.addEventListener("click", (event) => {
