@@ -76,7 +76,7 @@ class TestWindowsSupport(unittest.TestCase):
             (Path(td) / 'scripts/showcase.sh').write_text('#!/bin/bash\n', encoding='utf-8')
             result = subprocess.run(['bash', str(WSL), td], capture_output=True, text=True, timeout=6)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Ubuntu WSL 2 distribution', result.stderr)
+        self.assertIn('WSL 2 is required', result.stderr)
 
 
 if __name__ == '__main__':
