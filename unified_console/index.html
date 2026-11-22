@@ -26,6 +26,7 @@
         <div class="gate-help"><span class="inline-code">cat ~/.config/ci-cd-lab/unified-console/viewer.token</span><button class="mini-copy" data-copy="cat ~/.config/ci-cd-lab/unified-console/viewer.token" aria-label="Copy token retrieval command">Copy</button></div>
         <p class="small-muted">Your token stays in this browser tab's memory. No credentials are stored in local storage or sent to external services.</p>
       </div>
+      <div class="gate-credit">Developed by Moshe Bogo</div>
       <div class="gate-bottom"><span>OPSBOARD / LOCAL ENVIRONMENT</span><span>01 — DOCKER <i></i> 02 — GITOPS</span></div>
     </div>
   </section>
@@ -48,7 +49,7 @@
     </aside>
 
     <div class="workspace">
-      <header class="topbar"><div class="crumb">WORKSPACE <span>/</span> <strong id="crumb-label">OVERVIEW</strong></div><div class="topbar-right"><span class="last-sync" id="last-sync">NOT CHECKED</span><button id="refresh" class="refresh-button" aria-label="Refresh operational status">↻ <span>Refresh</span></button><span class="avatar">OB</span></div></header>
+      <header class="topbar"><div class="crumb">WORKSPACE <span>/</span> <strong id="crumb-label">OVERVIEW</strong></div><div class="topbar-right"><span class="last-sync" id="last-sync">NOT CHECKED</span><button id="refresh" class="refresh-button" aria-label="Refresh operational status">↻ <span>Refresh</span></button><span class="header-credit">Developed by Moshe Bogo</span><span class="avatar">OB</span></div></header>
       <main id="main" tabindex="-1">
         <section class="page" id="page-overview" data-page="overview">
           <div class="page-intro"><div><p class="eyebrow">OPERATIONS / OVERVIEW <span class="divider-dot">·</span> <span id="overview-date">LIVE STATUS</span></p><h1>Delivery, without the guesswork.</h1><p class="lead">A clear view of what is running, what passed, and what can be safely changed.</p></div><a class="subtle-link" href="https://github.com/Mishkaaass/ci-cd-lab" target="_blank" rel="noopener noreferrer">View repository <span>↗</span></a></div>
@@ -89,9 +90,29 @@
             <div class="showcase-copy"><p class="eyebrow">LIVE DEMO · LOCAL OPERATOR</p><h2>Watch the actual control flow.</h2><p>A single, predefined demonstration. Actions run only against the dedicated local lab while its terminal supervisor is active.</p><div class="showcase-indicator"><span class="showcase-light" id="showcase-light"></span><strong id="showcase-state">Checking local supervisor</strong><span id="showcase-summary">Reading current session...</span></div></div>
             <div class="showcase-actions"><button class="showcase-primary" data-start="all" disabled>Run full showcase <span aria-hidden="true">↗</span></button><div class="showcase-secondary"><button data-start="docker" disabled>Docker drill</button><button data-start="gitops" disabled>GitOps drift test</button></div><p class="showcase-note">Guarded local changes only. During the Docker drill the Green slot is briefly active, then traffic returns to Blue. The timeline below retains each transition.</p></div>
           </div>
+          <div class="showcase-attention" id="showcase-attention" role="alert" aria-live="assertive" hidden>
+            <div class="attention-icon" aria-hidden="true">!</div>
+            <div><strong id="showcase-attention-title">Action needed in terminal</strong><p id="showcase-attention-message">Complete authorization in the launcher terminal.</p></div>
+            <span class="attention-location">LOCAL TERMINAL</span>
+          </div>
           <div class="showcase-stats"><div><span>DOCKER PHASE</span><strong id="showcase-docker">Waiting</strong></div><div><span>GITOPS PHASE</span><strong id="showcase-gitops">Waiting</strong></div><div><span>LAST SESSION</span><strong id="showcase-when">—</strong></div></div>
-          <div class="section-heading"><div><p class="eyebrow">VERIFIED EVENT STREAM</p><h2>What really happened.</h2></div><span class="meta-note" id="showcase-event-count">No events</span></div>
-          <div class="showcase-timeline" id="showcase-events" aria-live="polite" aria-relevant="additions text"><p class="empty">The launcher will enable live drills; their results will remain visible after rollback.</p></div>
+          <div class="showcase-evidence-head"><div><p class="eyebrow">LIVE EVIDENCE / TWO VIEWS</p><h2>See the checks, not just the outcome.</h2></div><span class="meta-note" id="showcase-event-count">No events</span></div>
+          <div class="showcase-inspection">
+            <section class="showcase-evidence-card" aria-label="Verified event timeline">
+              <div class="evidence-card-heading"><strong>Verified event timeline</strong><small>Milestones retained after rollback</small></div>
+              <div class="showcase-timeline" id="showcase-events" aria-live="polite" aria-relevant="additions text"><p class="empty">The launcher will enable live drills; their results will remain visible after rollback.</p></div>
+            </section>
+            <section class="showcase-evidence-card showcase-terminal-card" aria-label="Read-only live process output">
+              <div class="terminal-heading">
+                <div><span class="terminal-symbol">›_</span><strong>Live terminal</strong><small>Sanitized output from guarded scripts</small></div>
+                <div class="terminal-actions"><span class="terminal-live-dot" id="terminal-live-dot"></span><button id="terminal-copy" type="button" disabled>Copy log</button></div>
+              </div>
+              <div class="terminal-output" id="showcase-terminal-output" role="log" aria-live="off" aria-label="Selected real script output">
+                <div id="showcase-terminal-lines"><div class="terminal-empty">Waiting for the first lab run. No shell access is provided here.</div></div>
+              </div>
+              <div class="terminal-caption"><span>READ-ONLY · STRICT OUTPUT ALLOWLIST</span><span id="terminal-line-count">0 lines</span></div>
+            </section>
+          </div>
           <div class="showcase-help"><strong>First time here?</strong><span>In the repository, run <code>bash scripts/showcase.sh</code> once and leave that terminal open. Return to this page to start a real drill. A plain <code>unified-console.sh serve</code> session is intentionally view-only.</span></div>
         </section>
 
