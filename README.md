@@ -1,11 +1,16 @@
-# OpsBoard — CI/CD & GitOps Control Center
+# OpsBoard — End-to-End DevSecOps & CI/CD Platform
 
-[![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
+**A complete, hands-on DevSecOps platform demonstrating secure software delivery, automated deployment validation, failure recovery, and infrastructure self-healing.**
 
-**A working DevSecOps lab that proves releases can be delivered, rejected and recovered safely.** One local dashboard shows Docker deployments, Kubernetes reconciliation, real pipeline checks and a read-only live terminal.
+OpsBoard integrates **GitHub Actions, Docker Blue/Green deployments, automated rollback, Kubernetes, Argo CD, and a unified monitoring dashboard** into a practical, locally reproducible environment.
+
+The platform demonstrates real-world CI/CD workflows — from automated testing and security gates to verified deployments, traffic switching, GitOps reconciliation, and recovery from failed releases.
+
+Through an interactive dashboard with **live deployment events, real CI results, and a read-only terminal**, reviewers can execute guided demonstrations and observe exactly what happens behind the scenes.
 
 *Developed by Moshe Bogo*
 
+[![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
 ![OpsBoard interface preview](docs/assets/opsboard-showcase-preview.png)
 
 *Preview data is illustrative. Live results are read from the actual local labs and GitHub Actions.*
