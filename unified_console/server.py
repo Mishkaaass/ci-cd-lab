@@ -404,14 +404,93 @@ def github_state() -> dict:
     }
 
 
+def github_cd_state() -> dict:
+    """Read CI and CD workflow evidence and compare complete main commit SHAs.
+
+    This is an independent, read-only GitHub observer. It cannot trigger a
+    workflow, mutate the repo or claim that a GHCR digest was verified.
+    """
+    unavailable = {
+        "available": False,
+        "status": None,
+        "conclusion": None,
+        "sha": None,
+        "full_sha": None,
+        "ci_sha": None,
+        "url": None,
+        "matches_ci": False,
+        "ci_observed": False,
+    }
+    gh = find_command("gh")
+    if not gh:
+        return unavailable
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        latest_ci = pool.submit(
+            run_readonly,
+            [
+                gh,
+                "api",
+                f"repos/{REPO}/actions/workflows/ci.yml/runs?branch=main&per_page=1",
+            ],
+            8.0,
+        )
+        latest_cd = pool.submit(
+            run_readonly,
+            [
+                gh,
+                "api",
+                f"repos/{REPO}/actions/workflows/cd.yml/runs?branch=main&per_page=1",
+            ],
+            8.0,
+        )
+        ci_data = latest_ci.result()
+        cd_data = latest_cd.result()
+
+    def first_run(data: object) -> dict | None:
+        runs = data.get("workflow_runs") if isinstance(data, dict) else None
+        run = runs[0] if isinstance(runs, list) and runs else None
+        return run if isinstance(run, dict) else None
+
+    def full_sha(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        if not re.fullmatch(r"[0-9a-f]{40}", value, flags=re.I):
+            return None
+        return value.lower()
+
+    ci_run = first_run(ci_data)
+    cd_run = first_run(cd_data)
+    if not cd_run:
+        return unavailable
+    cd_head = full_sha(cd_run.get("head_sha"))
+    ci_head = full_sha(ci_run.get("head_sha")) if ci_run else None
+    url = cd_run.get("html_url")
+    if not isinstance(url, str) or not re.fullmatch(
+        r"https://github\.com/Mishkaaass/ci-cd-lab/actions/runs/[0-9]+", url
+    ):
+        url = None
+    return {
+        "available": True,
+        "status": _safe_text(cd_run.get("status"), 32),
+        "conclusion": _safe_text(cd_run.get("conclusion"), 32),
+        "sha": compact_sha(cd_head),
+        "full_sha": cd_head,
+        "ci_sha": compact_sha(ci_head),
+        "url": url,
+        "matches_ci": bool(ci_head and cd_head and ci_head == cd_head),
+        "ci_observed": bool(ci_head),
+    }
+
+
 def collect() -> dict:
     # Independent read-only sources run concurrently; an offline cluster must
     # not delay Docker data and vice versa.
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         docker = pool.submit(docker_state)
         kube = pool.submit(kubernetes_state)
         github = pool.submit(github_state)
-        return {
+        cd_future = pool.submit(github_cd_state)
+        result = {
             "observed_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "scope": "local-lab",
             "read_only": True,
@@ -419,6 +498,8 @@ def collect() -> dict:
             "kubernetes": kube.result(),
             "ci": github.result(),
         }
+        result["cd"] = cd_future.result()
+        return result
 
 
 def snapshot() -> dict:

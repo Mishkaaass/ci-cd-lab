@@ -37,7 +37,8 @@
       <div class="workspace-tag"><span class="live-dot"></span><span>Local lab</span><span class="tag-mini">01 / 02</span></div>
       <p class="sidebar-label">WORKSPACE</p>
       <nav class="nav-list" aria-label="Sections">
-        <button class="nav-link active" data-view="overview" aria-current="page"><span class="nav-icon">▦</span>Overview<span class="nav-index">01</span></button>
+        <button class="nav-link active" data-view="guided" aria-current="page"><span class="nav-icon">↗</span>Guided journey<span class="nav-index">01</span></button>
+        <button class="nav-link" data-view="overview"><span class="nav-icon">▦</span>Overview<span class="nav-index">01</span></button>
         <button class="nav-link" data-view="docker"><span class="nav-icon">⬡</span>Docker delivery<span class="nav-index">02</span></button>
         <button class="nav-link" data-view="kubernetes"><span class="nav-icon">◇</span>Kubernetes GitOps<span class="nav-index">03</span></button>
         <button class="nav-link" data-view="security"><span class="nav-icon">◈</span>Pipeline &amp; security<span class="nav-index">04</span></button>
@@ -51,9 +52,53 @@
     <div class="workspace">
       <header class="topbar"><div class="crumb">WORKSPACE <span>/</span> <strong id="crumb-label">OVERVIEW</strong></div><div class="topbar-right"><span class="last-sync" id="last-sync">NOT CHECKED</span><button id="refresh" class="refresh-button" aria-label="Refresh operational status">↻ <span>Refresh</span></button><span class="header-credit">Developed by Moshe Bogo</span><span class="avatar">OB</span></div></header>
       <main id="main" tabindex="-1">
+                <section class="page guided-page" id="page-guided" data-page="guided" hidden>
+          <div class="guide-heading">
+            <div>
+              <p class="eyebrow"><span class="live-dot"></span> GUIDED DEVSECOPS EXPERIENCE / READ & RUN</p>
+              <h1>From pull request<br>to <em>safe recovery.</em></h1>
+              <p class="lead">Six clear stages. Real GitHub evidence. Two guarded local experiments. Understand the entire delivery lifecycle without changing the repository.</p>
+            </div>
+            <div class="guide-progress-card" aria-live="polite"><span>VERIFIED CHECKPOINTS</span><strong id="guide-verified-count">0 / 4</strong><small>Live CI · Live CD · Docker · GitOps</small></div>
+          </div>
+          <div class="guide-trust"><span class="guide-trust-icon">◎</span><div><strong>What is interactive here?</strong><p>CI, CD and artifact stages inspect <b>real, read-only evidence</b>. Docker and GitOps run <b>predefined experiments</b> on your local lab. No browser-triggered PRs, deployments to GitHub, or arbitrary shell commands.</p></div><span class="guide-trust-tag">NO SIMULATED SUCCESS</span></div>
+          <div class="guide-grid">
+            <nav class="guide-steps" aria-label="Delivery lifecycle stages">
+              <div class="guide-steps-heading"><span>YOUR WALKTHROUGH</span><span>01 — 06</span></div>
+              <button class="guide-step selected" data-guide-step="0" type="button" aria-current="step"><span class="guide-step-no">01</span><span class="guide-step-copy"><strong>Pull request</strong><small>Change &amp; review</small></span><span class="guide-step-status" id="guide-step-state-0">EXAMPLE</span></button>
+              <button class="guide-step" data-guide-step="1" type="button"><span class="guide-step-no">02</span><span class="guide-step-copy"><strong>Seven CI gates</strong><small>Quality &amp; security</small></span><span class="guide-step-status" id="guide-step-state-1">CHECKING</span></button>
+              <button class="guide-step" data-guide-step="2" type="button"><span class="guide-step-no">03</span><span class="guide-step-copy"><strong>CD pipeline</strong><small>Build, scan, publish</small></span><span class="guide-step-status" id="guide-step-state-2">CHECKING</span></button>
+              <button class="guide-step" data-guide-step="3" type="button"><span class="guide-step-no">04</span><span class="guide-step-copy"><strong>Release artifact</strong><small>Digest &amp; provenance</small></span><span class="guide-step-status" id="guide-step-state-3">INSPECT</span></button>
+              <button class="guide-step" data-guide-step="4" type="button"><span class="guide-step-no">05</span><span class="guide-step-copy"><strong>Blue/Green recovery</strong><small>Reject · release · rollback</small></span><span class="guide-step-status" id="guide-step-state-4">NOT RUN</span></button>
+              <button class="guide-step" data-guide-step="5" type="button"><span class="guide-step-no">06</span><span class="guide-step-copy"><strong>Kubernetes GitOps</strong><small>Drift &amp; self-healing</small></span><span class="guide-step-status" id="guide-step-state-5">NOT RUN</span></button>
+              <div class="guide-steps-footer">Progress is evidence-based, not a checklist of clicked buttons.</div>
+            </nav>
+            <article class="guide-focus" aria-label="Selected stage explanation">
+              <div class="guide-focus-meta"><span id="guide-current-step">STAGE 01 / 06</span><span class="guide-focus-status" id="guide-focus-status">HISTORICAL EXAMPLE</span></div>
+              <h2 id="guide-focus-title">Start with a change.</h2>
+              <p class="guide-focus-intro" id="guide-focus-intro">Before a release reaches main, it passes review and automated checks.</p>
+              <div class="guide-learn-row"><div class="guide-learn-icon">?</div><div><strong>What does this prove?</strong><p id="guide-focus-why">The change can be reviewed and gated before merge.</p></div></div>
+              <div class="guide-proof">
+                <div class="guide-proof-top"><span>OBSERVED EVIDENCE</span><span class="guide-proof-light" id="guide-proof-light"></span></div>
+                <strong id="guide-proof-title">Opening a real example PR</strong>
+                <p id="guide-proof-detail">Use the link below to inspect review history and checks.</p>
+                <div class="guide-job-grid" id="guide-job-grid" hidden></div>
+              </div>
+              <div class="guide-focus-actions">
+                <a class="guide-evidence-button" id="guide-source-link" href="https://github.com/Mishkaaass/ci-cd-lab/pull/53" target="_blank" rel="noopener noreferrer">Inspect source evidence ↗</a>
+                <a class="guide-practice-button" id="guide-practice-link" href="https://github.com/Mishkaaass/ci-cd-lab/blob/main/docs/guided-experience.md" target="_blank" rel="noopener noreferrer" hidden>Try CI in your own fork ↗</a>
+                <button class="guide-run-button" id="guide-run-selected" type="button" hidden disabled>Run guarded local test ↗</button>
+                <button class="guide-next-button" id="guide-next-stage" type="button">Next stage →</button>
+              </div>
+              <div class="guide-safety-note" id="guide-safety-note">Viewing PRs does not create a new CI run.</div>
+            </article>
+          </div>
+          <div class="guide-endnote"><div><span>THE CORE PRINCIPLE</span><strong>Observe the evidence. Run a safe failure. Verify recovery.</strong></div><button type="button" data-view="showcase">Open live terminal &amp; event timeline →</button></div>
+        </section>
+
         <section class="page" id="page-overview" data-page="overview">
           <div class="page-intro"><div><p class="eyebrow">OPERATIONS / OVERVIEW <span class="divider-dot">·</span> <span id="overview-date">LIVE STATUS</span></p><h1>Delivery, without the guesswork.</h1><p class="lead">A clear view of what is running, what passed, and what can be safely changed.</p></div><a class="subtle-link" href="https://github.com/Mishkaaass/ci-cd-lab" target="_blank" rel="noopener noreferrer">View repository <span>↗</span></a></div>
-          <div class="intro-cta"><div><span class="intro-kicker">INTERACTIVE WALKTHROUGH</span><strong>See a release fail safely, recover, and return to Git.</strong><span>One guided run · Real deployment events · No guesswork.</span></div><button class="primary-cta" data-view="showcase">Open live demo <span aria-hidden="true">↗</span></button></div>
+          <div class="intro-cta"><div><span class="intro-kicker">INTERACTIVE WALKTHROUGH</span><strong>See a release fail safely, recover, and return to Git.</strong><span>One guided run · Real deployment events · No guesswork.</span></div><button class="primary-cta" data-view="guided">Begin guided journey <span aria-hidden="true">↗</span></button></div>
           <div class="metric-grid">
             <article class="metric"><div class="metric-top"><span>LIVE DOCKER RELEASE</span><span class="metric-icon">⬡</span></div><strong id="metric-docker">—</strong><div class="metric-bottom"><span class="status-dot" id="dot-docker"></span><span id="metric-docker-detail">Awaiting connection</span></div></article>
             <article class="metric"><div class="metric-top"><span>MAIN BRANCH / CI</span><span class="metric-icon">⌁</span></div><strong id="metric-ci">—</strong><div class="metric-bottom"><span class="status-dot" id="dot-ci"></span><span id="metric-ci-detail">Awaiting connection</span></div></article>
@@ -86,6 +131,7 @@
 
         <section class="page" id="page-showcase" data-page="showcase" hidden>
           <div class="page-intro"><div><p class="eyebrow">INTERACTIVE DEMONSTRATION / LAB-ONLY</p><h1>A verified release. In real time.</h1><p class="lead">A broken candidate is blocked, a healthy release reaches Green, then rollback restores the exact original. Argo CD separately proves self-healing.</p></div><span class="outline-tag">LIVE EVIDENCE</span></div>
+          <div class="guide-showcase-return"><button type="button" data-view="guided">← Return to guided journey</button><span>Complete your current lab step, then review its verified evidence.</span></div>
           <div class="showcase-hero">
             <div class="showcase-copy"><p class="eyebrow">LIVE DEMO · LOCAL OPERATOR</p><h2>Watch the actual control flow.</h2><p>A single, predefined demonstration. Actions run only against the dedicated local lab while its terminal supervisor is active.</p><div class="showcase-indicator"><span class="showcase-light" id="showcase-light"></span><strong id="showcase-state">Checking local supervisor</strong><span id="showcase-summary">Reading current session...</span></div></div>
             <div class="showcase-actions"><button class="showcase-primary" data-start="all" disabled>Run full showcase <span aria-hidden="true">↗</span></button><div class="showcase-secondary"><button data-start="docker" disabled>Docker drill</button><button data-start="gitops" disabled>GitOps drift test</button></div><p class="showcase-note">Guarded local changes only. During the Docker drill the Green slot is briefly active, then traffic returns to Blue. The timeline below retains each transition.</p></div>
