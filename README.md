@@ -29,6 +29,17 @@ The **Unified Console** displays live status, a persistent evidence timeline, **
 
 > **Scope:** Local Linux lab, also supported from Windows through Ubuntu WSL 2 + Docker Desktop; not an AWS/EKS or internet-facing production environment. CI publishing a scanned container to GHCR **does not automatically deploy it to Kubernetes**. Kubernetes uses an independently reviewed, digest-pinned GitOps manifest.
 
+## Guided Experience — understand the full delivery lifecycle
+
+After launching OpsBoard, the first page is **Guided journey**: six stages
+connecting a real pull request, **7 CI gates**, a matching **CD** run, artifact
+inspection, **Blue/Green deployment + exact rollback**, and **Argo CD self-healing**.
+CI/CD evidence is read-only: the browser **does not** trigger GitHub pipelines.
+The two local labs run only their existing, fixed supervisor actions. Each step
+explains *what happens*, *why it matters*, and *what proves the result*.
+
+See the [step-by-step guided reviewer walkthrough](docs/guided-experience.md).
+
 ## 5-minute recruiter demo — start here
 
 **Before you begin:** Linux, Git, Python **3.14**, Docker Engine and Docker Compose v2. For the Kubernetes drill, install `kind` and `kubectl`; GitHub CLI (`gh`) is recommended for detailed private CI results. Docker access may require your Linux `sudo` password. A first-time container build or cluster installation can take longer than five minutes.

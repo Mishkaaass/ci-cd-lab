@@ -6,11 +6,211 @@
   let busy = false;
   let refreshInterval = null;
   let toastTimeout = null;
-  const pages = new Set(["overview", "docker", "kubernetes", "security", "showcase", "runbook"]);
+  const pages = new Set(["guided", "overview", "docker", "kubernetes", "security", "showcase", "runbook"]);
   let showcaseActive = false;
   let terminalSignature = "";
   let latestTerminal = [];
   let demoPoll = null;
+  // The guided tour interprets existing evidence; it never creates GitHub
+  // changes or authorizes an additional server-side operation.
+  let guidedSelection = 0;
+  let guidedOverview = {};
+  let guidedShowcase = {};
+  let guidedMilestones = {docker: false, gitops: false};
+  const REQUIRED_CI_GATES = Object.freeze([
+    "Python tests", "Code quality", "Dependency security", "Secret security",
+    "Container security", "API and browser security", "Isolated API attack scan"
+  ]);
+  const GUIDE_SOURCE = "https://github.com/Mishkaaass/ci-cd-lab";
+  const GUIDE_STAGES = Object.freeze([
+    {
+      title: "A change enters review.",
+      intro: "Start with a real pull request. Inspect what changed, the checks it required, and how it was merged into protected main.",
+      why: "Code review and CI are separate controls. A merged example demonstrates the process; opening it here does not run CI again.",
+      note: "Historical example (PR #53). This step is read-only and is not marked as a new execution.",
+      source: `${GUIDE_SOURCE}/pull/53`,
+      sourceLabel: "Inspect example PR ↗"
+    },
+    {
+      title: "Seven gates protect main.",
+      intro: "GitHub Actions tests Python code, formatting, dependencies, secrets, containers, the API/browser boundary, and a controlled attack scan.",
+      why: "A release should not advance merely because a build works. All seven independent required quality and security checks must pass.",
+      note: "LIVE READ-ONLY EVIDENCE. Results are read from GitHub, not launched by this button. Unavailable data never means success.",
+      source: `${GUIDE_SOURCE}/actions/workflows/ci.yml`,
+      sourceLabel: "Open CI workflow ↗"
+    },
+    {
+      title: "CI hands off to CD.",
+      intro: "After merge, the dedicated CD workflow builds, scans and publishes an image. Its commit identity must match the checked main revision.",
+      why: "A successful CI run is not a successful delivery. CD must complete independently on the correct source commit.",
+      note: "LIVE READ-ONLY EVIDENCE. A successful historical CD run is not proof that the latest main was published.",
+      source: `${GUIDE_SOURCE}/actions/workflows/cd.yml`,
+      sourceLabel: "Open CD workflow ↗"
+    },
+    {
+      title: "An image needs provenance.",
+      intro: "Inspect the CD build, vulnerability scan, SBOM and image-publishing steps. Production identity is an immutable digest, not a moving tag.",
+      why: "A green workflow reports its job result, but this console does not independently read and verify the GHCR artifact digest.",
+      note: "EVIDENCE BOUNDARY. To verify the exact published image, inspect GHCR and the workflow artifacts. GitOps promotion is separately reviewed.",
+      source: `${GUIDE_SOURCE}/actions/workflows/cd.yml`,
+      sourceLabel: "Inspect publishing logs ↗"
+    },
+    {
+      title: "Reject. Promote. Recover.",
+      intro: "Now run the real Docker drill. Watch an unhealthy candidate get blocked, a valid Green release receive traffic, and exact Blue rollback.",
+      why: "Readiness and release identity must be verified before Nginx switches traffic. Rollback must restore the original version and SHA.",
+      note: "LOCAL LAB ACTION. This recreates the inactive candidate and briefly changes local Nginx traffic, then rolls back. It does not change GitHub.",
+      action: "docker",
+      sourceLabel: "Run Docker demonstration ↗"
+    },
+    {
+      title: "Git repairs configuration drift.",
+      intro: "In the dedicated kind cluster, temporarily change replicas from 1 to 2 and watch Argo CD restore Git's desired count of 1.",
+      why: "GitOps is continuous reconciliation, not another Docker traffic switch. A separate cluster and reviewed manifest govern its desired state.",
+      note: "LOCAL LAB ACTION. This uses the existing fixed drift-test and never edits the GitOps repository or selects a user-supplied cluster.",
+      action: "gitops",
+      sourceLabel: "Run GitOps demonstration ↗"
+    }
+  ]);
+  function guideEvidence() {
+    const ci = guidedOverview.ci || {};
+    const cd = guidedOverview.cd || {};
+    const status = guidedShowcase || {};
+    const checks = new Map((Array.isArray(ci.jobs) ? ci.jobs : [])
+      .filter((x) => x && typeof x.name === "string")
+      .map((x) => [x.name, String(x.result || "").toLowerCase()]));
+    const ciVerified = Boolean(ci.available && ci.jobs_available &&
+      String(ci.conclusion || "").toLowerCase() === "success" &&
+      REQUIRED_CI_GATES.every((name) => checks.get(name) === "success"));
+    const cdVerified = Boolean(ciVerified && cd.available && cd.matches_ci &&
+      cd.ci_sha && cd.ci_sha === ci.sha &&
+      String(cd.conclusion || "").toLowerCase() === "success");
+    const dockerVerified = guidedMilestones.docker;
+    const gitopsVerified = guidedMilestones.gitops;
+    return {ci, cd, status, checks, ciVerified, cdVerified,
+      dockerVerified, gitopsVerified};
+  }
+  function guideStatusFor(index, ev) {
+    if (index === 0) return ["EXAMPLE", ""];
+    if (index === 3) return ["INSPECT", ""];
+    if (index === 1) return ev.ciVerified ? ["VERIFIED", "verified"] :
+      [String(ev.ci.conclusion || "").toLowerCase() === "failure" ? "FAILED" : "CHECK",
+        String(ev.ci.conclusion || "").toLowerCase() === "failure" ? "problem" : ""];
+    if (index === 2) return ev.cdVerified ? ["VERIFIED", "verified"] :
+      [ev.cd.available && ev.cd.ci_observed && !ev.cd.matches_ci ? "DIFFERENT SHA" :
+        String(ev.cd.conclusion || "").toLowerCase() === "failure" ? "FAILED" : "CHECK",
+        String(ev.cd.conclusion || "").toLowerCase() === "failure" && ev.cd.matches_ci ? "problem" : ""];
+    const passed = index === 4 ? ev.dockerVerified : ev.gitopsVerified;
+    const running = ["running", "preparing", "queued", "waiting_auth"].includes(ev.status.status);
+    return passed ? ["VERIFIED", "verified"] : running ? ["IN PROGRESS", "running"] :
+      [ev.status.status === "failed" ? "CHECK LOG" : "NOT RUN", ev.status.status === "failed" ? "problem" : ""];
+  }
+  function safeGuideRunUrl(value) {
+    return typeof value === "string" &&
+      /^https:\/\/github\.com\/Mishkaaass\/ci-cd-lab\/actions\/runs\/[0-9]+$/.test(value)
+      ? value : null;
+  }
+  function renderGuided() {
+    const ev = guideEvidence();
+    const verified = [ev.ciVerified, ev.cdVerified, ev.dockerVerified, ev.gitopsVerified]
+      .filter(Boolean).length;
+    setText("guide-verified-count", `${verified} / 4`);
+    GUIDE_STAGES.forEach((_stage, i) => {
+      const button = document.querySelector(`button[data-guide-step="${i}"]`);
+      if (!button) return;
+      button.classList.toggle("selected", i === guidedSelection);
+      if (i === guidedSelection) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
+      const label = $(`guide-step-state-${i}`);
+      if (!label) return;
+      const [message, css] = guideStatusFor(i, ev);
+      label.textContent = message;
+      label.className = "guide-step-status" + (css ? ` ${css}` : "");
+    });
+    const i = guidedSelection;
+    const stage = GUIDE_STAGES[i];
+    const [stageState, stageCss] = guideStatusFor(i, ev);
+    setText("guide-current-step", `STAGE ${String(i + 1).padStart(2, "0")} / 06`);
+    setText("guide-focus-status", stageState);
+    $("guide-focus-status").className = "guide-focus-status" + (stageCss ? ` ${stageCss}` : "");
+    setText("guide-focus-title", stage.title);
+    setText("guide-focus-intro", stage.intro);
+    setText("guide-focus-why", stage.why);
+    setText("guide-safety-note", stage.note);
+    const proofLight = $("guide-proof-light");
+    proofLight.className = "guide-proof-light" + (stageCss === "verified" ? " verified" : stageCss === "problem" ? " problem" : "");
+    const ciRun = safeGuideRunUrl(ev.ci.url);
+    const cdRun = safeGuideRunUrl(ev.cd.url);
+    let title = "Review the linked evidence";
+    let description = "No action is required on GitHub.";
+    if (i === 0) {
+      title = "Real pull request #53 (historical example)";
+      description = "Inspect what changed, its required checks, and the merge. This step does not claim a new PR was created.";
+    } else if (i === 1) {
+      title = ev.ciVerified ? `7 / 7 CI gates succeeded · ${ev.ci.sha || "unknown SHA"}` :
+        ev.ci.available ? `CI: ${String(ev.ci.conclusion || "pending").toUpperCase()} · ${ev.ci.sha || "unknown SHA"}` : "GitHub CI is not observable";
+      description = ev.ciVerified ? "Seven exact job names returned success on the observed main-branch run." :
+        "CI was not fully verified. Check the live job results and GitHub link before drawing conclusions.";
+    } else if (i === 2) {
+      title = ev.cdVerified ? `CD succeeded on main · ${ev.cd.sha || "unknown SHA"}` :
+        ev.cd.available ? `CD: ${String(ev.cd.conclusion || ev.cd.status || "pending").toUpperCase()} · ${ev.cd.sha || "unknown SHA"}` : "GitHub CD is not observable";
+      description = ev.cdVerified ? "Latest observed CI and CD commit identities match, and both workflows report success." :
+        ev.cd.available && ev.cd.ci_observed && !ev.cd.matches_ci ? "CD belongs to a different commit. Do not treat it as proof for the latest CI revision." :
+          "A successful, matching CD execution has not been verified for the observed CI commit.";
+    } else if (i === 3) {
+      title = "Artifact digest: not independently verified";
+      description = ev.cdVerified ? "CD reports success for the CI commit. Open its publishing job and GHCR to inspect the image digest, SBOM and provenance." :
+        "First verify the matching CD run. Then inspect the published image and immutable digest separately.";
+    } else if (i === 4) {
+      title = ev.dockerVerified ? "Verified: broken gate → Green → exact Blue rollback" :
+        "Awaiting a completed Docker drill";
+      description = ev.dockerVerified ? "A verified Docker completion marker was observed in this browser session. See Live Demo for the latest run." :
+        "Start the Docker drill, then inspect readiness rejection, successful promotion and restored version/SHA in Live Demo.";
+    } else if (i === 5) {
+      title = ev.gitopsVerified ? "Verified: Argo CD restored replicas to 1" :
+        "Awaiting a completed GitOps drift test";
+      description = ev.gitopsVerified ? "A verified GitOps reconciliation marker was observed in this browser session. Inspect live cluster health separately." :
+        "Run the dedicated drift test and watch Argo CD return 2 replicas to Git's desired 1.";
+    }
+    setText("guide-proof-title", title);
+    setText("guide-proof-detail", description);
+    const source = $("guide-source-link");
+    const run = $("guide-run-selected");
+    $("guide-practice-link").hidden = i !== 1;
+    source.hidden = Boolean(stage.action);
+    if (!stage.action) {
+      source.href = i === 1 ? (ciRun || stage.source) :
+        (i === 2 || i === 3) ? (cdRun || stage.source) : stage.source;
+      source.textContent = i === 1 && ciRun ? "View actual CI run ↗" :
+        (i === 2 || i === 3) && cdRun ? "View actual CD run ↗" : stage.sourceLabel;
+    }
+    run.hidden = !stage.action;
+    if (stage.action) {
+      run.textContent = stage.sourceLabel;
+      run.disabled = !Boolean(ev.status.enabled) || showcaseActive;
+      run.title = ev.status.enabled ? "Run an approved local lab action" :
+        "Start bash scripts/showcase.sh in a local terminal first";
+    }
+    const jobList = $("guide-job-grid");
+    jobList.hidden = i !== 1 || !Array.isArray(ev.ci.jobs) || !ev.ci.jobs.length;
+    jobList.replaceChildren();
+    if (!jobList.hidden) {
+      REQUIRED_CI_GATES.forEach((name) => {
+        const chip = document.createElement("span");
+        const result = ev.checks.get(name) || "not observed";
+        chip.className = "guide-job-item" + (result === "success" ? " pass" : "");
+        chip.textContent = `${result === "success" ? "✓" : "•"} ${name}`;
+        jobList.append(chip);
+      });
+    }
+    setText("guide-next-stage", i === 5 ? "Restart tour ↺" : "Next stage →");
+  }
+  function selectGuideStep(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= GUIDE_STAGES.length) return;
+    guidedSelection = index;
+    renderGuided();
+  }
+
 
   function setText(id, value, empty = "—") {
     const el = $(id);
@@ -232,6 +432,12 @@
       verified: "Version and SHA verified", green: "GREEN: live traffic", blue: "Rollback: BLUE restored", complete: "Rollback verified",
       drift: "Changing replicas", scaled: "Drift introduced", restored: "Reconciled to Git"
     };
+    guidedShowcase = status;
+    if (["passed", "running"].includes(status.status)) {
+      if (status.docker_phase === "complete") guidedMilestones.docker = true;
+      if (status.gitops_phase === "restored") guidedMilestones.gitops = true;
+    }
+    renderGuided();
     setText("showcase-docker", phases[status.docker_phase] || "Not run");
     setText("showcase-gitops", phases[status.gitops_phase] || "Not run");
     const when = status.started_at ? new Date(status.started_at) : null;
@@ -327,6 +533,8 @@
       if (!response.ok) throw new Error(`Status request returned ${response.status}`);
       const json = await response.json();
       render(json);
+      guidedOverview = json;
+      renderGuided();
       setText("unlock-error", "");
       return true;
     } catch {
@@ -357,7 +565,7 @@
     }
     $("gate").hidden = true;
     $("shell").hidden = false;
-    setView("overview");
+    setView("guided");
     await pollShowcase();
     if (!refreshInterval) refreshInterval = setInterval(update, 14000);
     if (!demoPoll) demoPoll = setInterval(pollShowcase, 1000);
@@ -382,10 +590,20 @@
       toast("Copy unavailable; select the terminal text instead");
     }
   });
+  $("guide-next-stage").addEventListener("click", () => {
+    selectGuideStep((guidedSelection + 1) % GUIDE_STAGES.length);
+  });
+  $("guide-run-selected").addEventListener("click", () => {
+    const action = GUIDE_STAGES[guidedSelection].action;
+    if (!action || showcaseActive || !guidedShowcase.enabled) return;
+    setView("showcase");
+    startDemo(action);
+  });
   $("refresh").addEventListener("click", update);
   document.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-view],button[data-copy],button[data-start]");
+    const button = event.target.closest("button[data-view],button[data-copy],button[data-start],button[data-guide-step]");
     if (!button) return;
+    if (button.dataset.guideStep !== undefined) selectGuideStep(Number(button.dataset.guideStep));
     if (button.dataset.view) setView(button.dataset.view);
     if (button.dataset.copy) copyCommand(button.dataset.copy);
     if (button.dataset.start) startDemo(button.dataset.start);
