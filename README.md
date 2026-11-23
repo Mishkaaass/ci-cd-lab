@@ -11,7 +11,7 @@ Through an interactive dashboard with **live deployment events, real CI results,
 *Developed by Moshe Bogo*
 
 [![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
-![OpsBoard interface preview](docs/assets/opsboard-showcase-preview.png)
+![OpsBoard Guided Journey homepage](docs/assets/opsboard-guided-home.png)
 
 *Preview data is illustrative. Live results are read from the actual local labs and GitHub Actions.*
 
