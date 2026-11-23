@@ -1,0 +1,57 @@
+# Generic, reusable *CI security* gates for downstream portfolio repositories.
+# The called workflow checks out the *caller* repository and commit.
+# Infrastructure plans, language tests and deployments remain repo-specific.
+name: Reusable DevSecOps security gates
+
+on:
+  workflow_call:
+    inputs:
+      scan_path:
+        description: "IaC/config path to scan in the caller repository"
+        required: false
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Gitleaks full-history secrets scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout caller repository and full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prevent leaked credentials from entering history
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  config-security:
+    name: Trivy config HIGH / CRITICAL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: IaC/config policy gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # signed v0.36.0
+        with:
+          scan-type: config
+          scan-ref: ${{ inputs.scan_path }}
+          severity: CRITICAL,HIGH
+          format: table
+          exit-code: '1'
+          hide-progress: true
