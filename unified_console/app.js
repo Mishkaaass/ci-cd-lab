@@ -6,7 +6,7 @@
   let busy = false;
   let refreshInterval = null;
   let toastTimeout = null;
-  const pages = new Set(["guided", "overview", "docker", "kubernetes", "security", "showcase", "runbook"]);
+  const pages = new Set(["guided", "learning", "overview", "docker", "kubernetes", "security", "showcase", "runbook"]);
   let showcaseActive = false;
   let terminalSignature = "";
   let latestTerminal = [];
@@ -250,7 +250,7 @@
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    setText("crumb-label", view === "kubernetes" ? "KUBERNETES GITOPS" : view === "docker" ? "DOCKER DELIVERY" : view === "security" ? "PIPELINE & SECURITY" : view === "showcase" ? "LIVE DEMO" : view.toUpperCase());
+    setText("crumb-label", view === "kubernetes" ? "KUBERNETES GITOPS" : view === "docker" ? "DOCKER DELIVERY" : view === "security" ? "PIPELINE & SECURITY" : view === "showcase" ? "LIVE DEMO" : view === "learning" ? "ENGINEERING LEARNING LAB" : view.toUpperCase());
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function toast(message) {
@@ -371,6 +371,7 @@
       }
     }
     setText("footer-status", docker.healthy && kubeHealthy ? "TWO LABS OBSERVED" : "PARTIAL OPERATIONAL VISIBILITY");
+    if (window.OpsboardLearning) window.OpsboardLearning.update(data);
   }
   function renderTerminal(rows, active) {
     const list = Array.isArray(rows) ? rows.slice(-125) : [];
@@ -572,6 +573,7 @@
   });
   $("lock-console").addEventListener("click", () => {
     viewerToken = null;
+    if (window.OpsboardLearning) window.OpsboardLearning.reset();
     $("shell").hidden = true;
     $("gate").hidden = false;
     if (refreshInterval) clearInterval(refreshInterval);
