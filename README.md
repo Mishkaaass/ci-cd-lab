@@ -40,6 +40,14 @@ explains *what happens*, *why it matters*, and *what proves the result*.
 
 See the [step-by-step guided reviewer walkthrough](docs/guided-experience.md).
 
+## Engineering Learning Lab — understand the infrastructure
+
+Alongside the six-stage **Guided journey**, the sidebar now offers **Engineering lab**: six interactive learning modules with **18 real-world prediction scenarios** across Docker/Nginx, Kubernetes/Argo CD, FastAPI, PostgreSQL, CI/CD artifacts, and security. Each scenario includes multiple-choice decisions, a technical explanation, a relevant source link, and a live **read-only** snapshot when evidence is available.
+
+The learning exercises **do not perform deployments, change traffic or Kubernetes, or execute shell commands**. To observe actual behavior, use the existing guarded **Live demo** actions separately. Quiz progress is local to the current browser tab and must never be mistaken for operational verification.
+
+[Explore all 18 engineering exercises and their evidence boundaries](docs/engineering-learning-lab.md).
+
 ## 5-minute recruiter demo — start here
 
 **Before you begin:** Linux, Git, Python **3.14**, Docker Engine and Docker Compose v2. For the Kubernetes drill, install `kind` and `kubectl`; GitHub CLI (`gh`) is recommended for detailed private CI results. Docker access may require your Linux `sudo` password. A first-time container build or cluster installation can take longer than five minutes.
