@@ -7,6 +7,7 @@
   <meta name="description" content="OpsBoard, a secure local delivery control center for Docker Blue/Green and Kubernetes GitOps.">
   <title>OpsBoard — Delivery control center</title>
   <link rel="stylesheet" href="/assets/style.css">
+  <script defer src="/assets/learning.js"></script>
   <script defer src="/assets/app.js"></script>
 </head>
 <body>
@@ -38,6 +39,7 @@
       <p class="sidebar-label">WORKSPACE</p>
       <nav class="nav-list" aria-label="Sections">
         <button class="nav-link active" data-view="guided" aria-current="page"><span class="nav-icon">↗</span>Guided journey<span class="nav-index">01</span></button>
+        <button class="nav-link" data-view="learning"><span class="nav-icon">✦</span>Engineering lab<span class="nav-index">18</span></button>
         <button class="nav-link" data-view="overview"><span class="nav-icon">▦</span>Overview<span class="nav-index">01</span></button>
         <button class="nav-link" data-view="docker"><span class="nav-icon">⬡</span>Docker delivery<span class="nav-index">02</span></button>
         <button class="nav-link" data-view="kubernetes"><span class="nav-icon">◇</span>Kubernetes GitOps<span class="nav-index">03</span></button>
@@ -160,6 +162,44 @@
             </section>
           </div>
           <div class="showcase-help"><strong>First time here?</strong><span>In the repository, run <code>bash scripts/showcase.sh</code> once and leave that terminal open. Return to this page to start a real drill. A plain <code>unified-console.sh serve</code> session is intentionally view-only.</span></div>
+        </section>
+
+
+        <section class="page learning-page" id="page-learning" data-page="learning" hidden>
+          <div class="page-intro">
+            <div><p class="eyebrow"><span class="live-dot"></span> ENGINEERING LEARNING LAB / PREDICT · INSPECT · EXPLAIN</p>
+              <h1>Understand what<br>runs <em>under the hood.</em></h1>
+              <p class="lead">Six guided modules and eighteen practical engineering decisions. Predict first; then inspect live, read-only evidence from your local lab.</p>
+            </div>
+            <div class="learning-score"><span>QUESTIONS SOLVED</span><strong id="learning-count">0 / 18</strong><small>Correct answers only · This browser tab</small></div>
+          </div>
+          <div class="learning-safety"><strong>Learning mode is read-only.</strong> Questions never run commands, change routes, scale Pods, or access databases. Actual experiments remain in the existing, guarded Live Demo. Live evidence is always identified separately from teaching explanations.</div>
+          <div class="learning-layout">
+            <nav id="learning-module-list" class="learning-modules" aria-label="Engineering learning modules"></nav>
+            <article class="learning-workspace">
+              <div class="learning-header">
+                <div><span class="eyebrow" id="learning-module-topic">TRAFFIC &amp; RELEASE SAFETY</span><h2 id="learning-module-title">Docker &amp; Nginx</h2><p id="learning-intro" class="dim"></p></div>
+                <span id="learning-stage" class="learning-stage">CHALLENGE 1 / 3</span>
+              </div>
+              <section class="learning-quiz" aria-label="Predict the outcome">
+                <span class="learning-kicker">01 / PREDICT THE OUTCOME</span>
+                <h3 id="learning-question">What will happen?</h3>
+                <div id="learning-choices" class="learning-choices"></div>
+                <div id="learning-feedback" class="learning-feedback" role="status" aria-live="polite" hidden></div>
+              </section>
+              <section class="learning-proof" aria-label="Understand the proof">
+                <span class="learning-kicker">02 / UNDERSTAND THE EVIDENCE</span>
+                <p id="learning-proof"></p>
+                <div class="learning-live-heading"><strong>Observed local evidence</strong><span id="learning-live-state">NOT OBSERVED</span></div>
+                <ul id="learning-evidence"></ul>
+                <div class="learning-source-row"><a id="learning-source" href="https://github.com/Mishkaaass/ci-cd-lab" target="_blank" rel="noopener noreferrer">Inspect source ↗</a><button type="button" id="learning-inspect" data-view="docker">Open live details ↗</button></div>
+                <p class="learning-help">Optional read-only command, run in your own trusted terminal:</p>
+                <div class="learning-command"><code id="learning-command"></code><button id="learning-copy" type="button">Copy</button></div>
+              </section>
+              <div class="learning-footer"><button id="learning-back" type="button">← Previous</button><button id="learning-reset" type="button">Reset answers</button><button id="learning-next" type="button">Next challenge →</button></div>
+            </article>
+          </div>
+          <div class="learning-bottom">These modules explain the existing demo's mechanisms; the current CI/CD, Docker and GitOps workflows are unchanged. Offline or missing evidence is never marked as verified.</div>
         </section>
 
         <section class="page" id="page-runbook" data-page="runbook" hidden><div class="page-intro"><div><p class="eyebrow">OPERATOR NOTES / LOCAL LAB</p><h1>Make the safe path obvious.</h1><p class="lead">For most reviewers, start the guided console once. Use the commands below only for manual inspection.</p></div><span class="outline-tag">GUIDED LOCAL LAB</span></div>

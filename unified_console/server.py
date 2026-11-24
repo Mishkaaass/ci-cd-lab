@@ -34,6 +34,7 @@ ASSETS = {
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/assets/style.css": ("style.css", "text/css; charset=utf-8"),
     "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/assets/learning.js": ("learning.js", "text/javascript; charset=utf-8"),
 }
 STATE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state")))
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
