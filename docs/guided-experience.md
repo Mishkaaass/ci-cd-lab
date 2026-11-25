@@ -54,7 +54,7 @@ reviewing CI nor reviewing CD from this dashboard schedules a GitHub job.
 
 The **Viewer Token** authorizes access to local observations. Only the
 explicitly started, foreground `scripts/showcase.sh` supervisor accepts
-three whitelisted local actions (`all`, `docker`, `gitops`); the browser does
+three whitelisted local actions (`all`, `docker`, `gitops`). Enter the separate private Operator token (`cat ~/.config/ci-cd-lab/unified-console/operator.token`) in the password dialog and type `RUN all`, `RUN docker`, or `RUN gitops` in the launcher terminal. The browser does
 not receive a shell, a Docker socket, or a user-defined Kubernetes target.
 The Live Terminal displays filtered, allowlisted output, not an interactive
 terminal. Progress badges are derived from returned evidence, not clicks.

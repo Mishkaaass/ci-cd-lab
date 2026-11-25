@@ -823,6 +823,19 @@ def showcase_request_is_safe(path: Path) -> bool:
         return False
 
 
+def approve_drill(action: str) -> bool:
+    """Never execute a browser request without foreground terminal consent."""
+    if action not in ACTIONS or not sys.stdin.isatty():
+        return False
+    try:
+        answer = input(
+            f"Approve local {action} drill? Type RUN {action} to proceed: "
+        )
+    except EOFError:
+        return False
+    return answer == f"RUN {action}"
+
+
 def run() -> int:
     os.umask(0o077)
     path = private_directory()
@@ -871,9 +884,10 @@ def run() -> int:
         else:
             raise RuntimeError("Timed out waiting for unified console")
         print("\nREADY — http://127.0.0.1:18002/", flush=True)
-        print("Local token path:", server.TOKEN_FILE, flush=True)
+        print("Local viewer token path:", server.TOKEN_FILE, flush=True)
+        print("Local operator token path:", server.OPERATOR_TOKEN_FILE, flush=True)
         print(
-            "Open Live Demo, then click Run full showcase. Leave this terminal open.",
+            "Open Live Demo, provide the operator token, then approve here.",
             flush=True,
         )
         print(
@@ -897,10 +911,16 @@ def run() -> int:
             request_file = path / "request.json"
             request = read_json(request_file)
             if request is not None:
-                progress.data["status"] = "running"
+                action = request.get("action")
+                progress.data["status"] = "queued"
+                progress.data["summary"] = "Awaiting explicit approval in the terminal"
                 progress.publish()
                 request_file.unlink(missing_ok=True)
-                action = request.get("action")
+                if not isinstance(action, str) or not approve_drill(action):
+                    progress.data["status"] = "idle"
+                    progress.data["summary"] = "Drill declined; no drill commands ran"
+                    progress.publish()
+                    continue
                 if action in ACTIONS:
                     progress.begin(action)
                     outcomes = []

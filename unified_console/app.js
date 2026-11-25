@@ -494,20 +494,38 @@
       renderShowcase({enabled:false,status:"offline",steps:[],summary:"Live demo status is temporarily unavailable."});
     }
   }
+  function requestOperatorToken() {
+    const dialog = $("operator-dialog");
+    const input = $("operator-token");
+    if (dialog.open) return Promise.resolve(null);
+    dialog.returnValue = "";
+    input.value = "";
+    return new Promise((resolve) => {
+      dialog.addEventListener("close", () => {
+        const token = dialog.returnValue === "run" ? input.value.trim() : null;
+        input.value = "";
+        resolve(token);
+      }, {once: true});
+      dialog.showModal();
+      input.focus();
+    });
+  }
   async function startDemo(action) {
     if (!viewerToken || showcaseActive || !["all", "docker", "gitops"].includes(action)) return;
+    const operatorToken = await requestOperatorToken();
+    if (!operatorToken || !viewerToken || showcaseActive) return;
     showcaseActive = true;
     document.querySelectorAll("button[data-start]").forEach((button) => button.disabled = true);
     try {
       const response = await fetch("/api/showcase/start", {
-        method: "POST", headers: {Authorization: `Bearer ${viewerToken}`, "Content-Type": "application/json"},
+        method: "POST", headers: {Authorization: `Bearer ${viewerToken}`, "X-OpsBoard-Operator": operatorToken, "Content-Type": "application/json"},
         credentials: "omit", cache: "no-store", body: JSON.stringify({action}), signal: AbortSignal.timeout(7000)
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error || `Request blocked (${response.status})`);
       }
-      toast("Real lab drill queued");
+      toast("Drill requested; approve it in the launcher terminal");
       await pollShowcase();
     } catch (error) {
       toast(`Demo not started: ${error.message}`);

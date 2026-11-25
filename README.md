@@ -90,7 +90,7 @@ cat ~/.config/ci-cd-lab/unified-console/viewer.token
 
 Paste the token into **Unlock**. Do not post it in screenshots, issues or chat. If **Action required: sudo** appears, enter your **Linux password in the original launcher terminal**, not in the browser. Nothing appears while you type; press Enter. The browser never receives the password.
 
-**3. Click `Live Demo` → `Run full showcase`.** The local supervisor runs two predefined, real drills. Watch the **Live Terminal** and timeline, then inspect the Docker, Kubernetes and Security panels. The terminal pane shows selected, sanitized command output; it is **not** a shell prompt and cannot run arbitrary commands.
+**3. Click `Live Demo` → `Run full showcase`.** Enter the separate private operator token (`cat ~/.config/ci-cd-lab/unified-console/operator.token`) in the password dialog. Then type `RUN all` in the original launcher terminal to approve the request (`RUN docker` or `RUN gitops` for an individual drill). Without explicit terminal consent no drill runs. The local supervisor runs two predefined, real drills. Watch the **Live Terminal** and timeline, then inspect the Docker, Kubernetes and Security panels. The terminal pane shows selected, sanitized command output; it is **not** a shell prompt and cannot run arbitrary commands.
 
 | During the demo | What you should see |
 |---|---|
@@ -159,7 +159,7 @@ flowchart LR
 - **Supply chain:** Gitleaks, dependency auditing, Trivy image policy, SBOM, provenance and immutable image digest verification. The `latest` tag is not the deployment identity.
 - **Release safety:** Readiness and exact release identity checks; Nginx configuration is validated before switching; rollback verifies the original deployment.
 - **Access:** Local `127.0.0.1` only; private Viewer token, content security policy (CSP), host/origin checks and no exposed Docker socket. The normal dashboard is read-only.
-- **Guided actions:** Explicit opt-in by running `scripts/showcase.sh`. While that trusted foreground supervisor runs, a valid local Viewer token may request only three fixed local lab actions (`all`, `docker`, `gitops`). The browser cannot supply shell commands or choose arbitrary Kubernetes targets. Use only on a trusted workstation.
+- **Guided actions:** Explicit opt-in by running `scripts/showcase.sh`. While that trusted foreground supervisor runs, a valid local Viewer token **plus a separate private Operator token** may request only three fixed local lab actions (`all`, `docker`, `gitops`). The browser cannot supply shell commands or choose arbitrary Kubernetes targets. Each request also requires exact foreground-terminal approval. Use only on a trusted, preferably disposable lab workstation.
 - **Boundaries:** `sudo` stays in the terminal. PostgreSQL PVC persistence is **not** a backup. This lab does not claim SSO, public TLS, high availability, production rollout or disaster-recovery certification.
 
 ## If something doesn't work
