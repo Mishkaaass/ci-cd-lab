@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# One foreground launcher for real local demo services and a guided browser tour.
-# No volume deletion, no forceful Docker cleanup, no cloud deployment.
+# Foreground reviewer launcher: Python runs in the project-local .venv;
+# only the existing fixed-scope supervisor may request local Docker/GitOps
+# changes after a user starts this command. No automatic volume deletion.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-PYTHON_BIN="$(command -v python3.14 || command -v python3)"
-if [ -z "$PYTHON_BIN" ]; then
-  echo "ERROR: Python 3.11+ is required" >&2
-  exit 1
-fi
-exec "$PYTHON_BIN" -m unified_console.showcase start
+bash scripts/setup-venv.sh
+exec "$ROOT/.venv/bin/python" -m unified_console.showcase start
