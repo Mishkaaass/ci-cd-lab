@@ -48,17 +48,37 @@ The learning exercises **do not perform deployments, change traffic or Kubernete
 
 [Explore all 18 engineering exercises and their evidence boundaries](docs/engineering-learning-lab.md).
 
+## Run requirements — choose your path
+
+OpsBoard has a **read-only browser console** and **two independent hands-on labs**. You do not need to install everything to start learning. The recommended local Python path is always an isolated **`.venv`**, never global `pip`.
+
+| What you want to do | What you need | Start with |
+| --- | --- | --- |
+| **Explore the architecture and console** | Linux, Python **3.14 + venv**, Bash/Make, browser | `make requirements` → `make setup` → `make viewer` |
+| **Run Docker Blue/Green** | Above + Docker Engine/Compose v2, Git, curl and authorized Docker access | [Docker walkthrough](docs/demo-docker-blue-green.md) |
+| **Run the full showcase (Docker + GitOps)** | Above + `kind`, `kubectl`, internet and sufficient RAM/disk | `make showcase` |
+| **Use Windows** | Ubuntu WSL 2 + Docker Desktop WSL integration | [Windows walkthrough](docs/windows.md) |
+| **Develop or run Python tests** | Python 3.14 + venv and PyPI access | `make setup-dev`; `.venv/bin/python -m pytest` |
+
+**Exact prerequisites, ports, Python requirements files, security boundaries and troubleshooting:** [RUN REQUIREMENTS](docs/REQUIREMENTS.md).
+
+`make setup` creates or reuses `.venv` **without downloading Python packages**. The Unified Console and its supervisor use only the Python standard library. The **legacy FastAPI history API** can install the pinned `requirements-dev.txt` *inside that same venv* when started; Docker images install their own dependencies **inside containers**. A Python venv does **not** install Docker, PostgreSQL, `kind` or `kubectl`. Never use `sudo pip` or change system Python.
+
 ## 5-minute recruiter demo — start here
 
-**Before you begin:** Linux, Git, Python **3.14**, Docker Engine and Docker Compose v2. For the Kubernetes drill, install `kind` and `kubectl`; GitHub CLI (`gh`) is recommended for detailed private CI results. Docker access may require your Linux `sudo` password. A first-time container build or cluster installation can take longer than five minutes.
+**Before you begin:** This section runs **both real local demonstrations**. On Linux you need Git, Python **3.14** with `venv`, Docker Engine + Compose v2, `kind` and `kubectl`; `gh` is optional for detailed GitHub results. Check `make requirements` before starting. Docker access may require your Linux `sudo` password. First-time setup can take longer than five minutes.
 
-**1. Start everything in one terminal.** Run these three commands:
+**1. Start the full showcase in one terminal.** Setup uses a project-local venv; the commands do not install packages into system Python.
 
 ```bash
 git clone https://github.com/Mishkaaass/ci-cd-lab.git
 cd ci-cd-lab
-bash scripts/showcase.sh
+make requirements        # read-only; shows required vs optional tools
+make setup               # creates/reuses .venv with Python 3.14
+make showcase            # starts real local Docker/GitOps demo supervisor
 ```
+
+**Equivalent legacy command:** `bash scripts/showcase.sh` now also validates and creates the local `.venv` automatically. If you only want to inspect the browser first, use `make viewer` **instead** of `make showcase` (no Docker/cluster setup). Stop the viewer before the showcase: both listen on port `18002`.
 
 Leave the terminal open. The launcher checks **all four Docker services** (`db`, `demo-blue`, `demo-green`, `nginx`) and the live proxy, not just whether port `8080` is open. If any service is missing or unhealthy, it prepares the lab automatically, verifies readiness, and preserves volumes. **No additional Docker commands or internal checkout paths are required.** If tools for GitOps are installed, it uses or prepares only the dedicated `kind-opsboard-review` cluster.
 
@@ -82,7 +102,7 @@ Paste the token into **Unlock**. Do not post it in screenshots, issues or chat. 
 
 Want to run only one test? Choose the separate **Docker** or **GitOps** action in Live Demo. To stop the local launcher, press `Ctrl+C` in its terminal; Docker volumes, kind cluster and PVC are preserved.
 
-**Viewer-only mode:** `bash scripts/unified-console.sh serve` opens the interface without enabling the guided actions. For a manual advanced drill, see `bash scripts/reviewer.sh drill` and `bash scripts/gitops-demo.sh drift-test` below.
+**Viewer-only mode:** `make viewer` (or `bash scripts/unified-console.sh serve`) opens the interface under `.venv/bin/python` without enabling local deployments or installing application packages. For a manual advanced drill, see `bash scripts/reviewer.sh drill` and `bash scripts/gitops-demo.sh drift-test` below.
 
 ## Windows — WSL 2 + Docker Desktop
 
@@ -157,6 +177,8 @@ flowchart LR
 **Optional manual commands:** `bash scripts/reviewer.sh status`, `bash scripts/reviewer.sh tokens`, `bash scripts/reviewer.sh up`, `bash scripts/reviewer.sh drill`, `bash scripts/gitops-demo.sh drift-test`, `bash scripts/gitops-demo.sh ui` (Argo CD at `https://127.0.0.1:18080`) and `bash scripts/gitops-demo.sh app` (legacy OpsBoard at `http://127.0.0.1:18081/dashboard`). Argo CD uses a separate `admin` account and its `argocd-initial-admin-secret`; never treat it as the OpsBoard Viewer token.
 
 **Safe shutdown:** `Ctrl+C` stops the launcher; it **does not delete** Docker volumes, the Kubernetes cluster or PostgreSQL PVC. Do not run `docker compose down -v` or `bash scripts/gitops-demo.sh down --delete-my-lab` unless data loss is intentional.
+
+**Setup guide:** [Run requirements](docs/REQUIREMENTS.md) · [Python dependencies](requirements-dev.txt) · [Makefile](Makefile)
 
 **Details for engineers:** [Unified runbook](docs/unified-console.md) · [Docker walkthrough](docs/demo-docker-blue-green.md) · [GitOps walkthrough](docs/demo-kubernetes-argocd.md) · [GitOps runbook](docs/kubernetes-gitops.md) · [Security model](docs/security-lab.md) · [CI](.github/workflows/ci.yml) · [CD](.github/workflows/cd.yml) · [Releases](https://github.com/Mishkaaass/ci-cd-lab/releases)
 
