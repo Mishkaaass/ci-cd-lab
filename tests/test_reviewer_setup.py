@@ -104,6 +104,25 @@ def test_readonly_requirements_never_installs_or_changes_privileges() -> None:
     assert "requirements-dev.txt" in setup
 
 
+def test_legacy_dashboard_uses_same_safe_venv_bootstrap() -> None:
+    lab = (ROOT / "scripts/lab.sh").read_text(encoding="utf-8")
+    assert "bash scripts/setup-venv.sh" in lab
+    assert "if [ ! -x .venv/bin/python ]" not in lab
+    assert "requirements-dev.txt" in lab
+
+
+def test_license_and_dependency_updates_are_reviewed() -> None:
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert license_text.startswith("MIT License")
+    assert "Copyright (c) 2026 Moshe Bogo" in license_text
+    assert "Permission is hereby granted" in license_text
+    assert "[![License: MIT]" in readme
+    assert "SQLAlchemy==2.1.9" in (ROOT / "requirements.txt").read_text()
+    assert "ruff==0.17.6" in (ROOT / "requirements-dev.txt").read_text()
+    assert "branch protection must be configured" in readme
+
+
 def test_readme_describes_requirements_and_legacy_package_install() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     requirements = (ROOT / "docs/REQUIREMENTS.md").read_text(encoding="utf-8")
