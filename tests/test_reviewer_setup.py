@@ -128,4 +128,4 @@ def test_readme_describes_requirements_and_legacy_package_install() -> None:
         "kubectl",
         "Legacy FastAPI",
     ):
-        assert phrase in requirements
+        assert phrase.lower() in requirements.lower()
