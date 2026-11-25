@@ -13,9 +13,13 @@ ENV PYTHONUNBUFFERED=1
 
 COPY requirements-demo.txt .
 
+# pip and its vendored libraries are build-time tools, not runtime dependencies.
+# Remove them from the final container after validating installed dependencies.
 RUN python -m pip install \
     --no-cache-dir \
-    -r requirements-demo.txt
+    -r requirements-demo.txt \
+    && python -m pip check \
+    && python -m pip uninstall --yes pip
 
 COPY demo_service ./demo_service
 
