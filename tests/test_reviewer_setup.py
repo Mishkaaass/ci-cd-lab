@@ -123,6 +123,15 @@ def test_license_and_dependency_updates_are_reviewed() -> None:
     assert "branch protection must be configured" in readme
 
 
+def test_demo_runtime_removes_build_only_pip() -> None:
+    dockerfile = (ROOT / "Dockerfile.demo").read_text(encoding="utf-8")
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python -m pip check" in dockerfile
+    assert "python -m pip uninstall --yes pip" in dockerfile
+    assert "docker build -f Dockerfile.demo -t opsboard-demo:ci ." in ci
+    assert "sh scripts/scan-image.sh opsboard-demo:ci" in ci
+
+
 def test_readme_describes_requirements_and_legacy_package_install() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     requirements = (ROOT / "docs/REQUIREMENTS.md").read_text(encoding="utf-8")
