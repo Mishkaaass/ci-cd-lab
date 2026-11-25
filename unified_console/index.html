@@ -211,5 +211,16 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog id="operator-dialog" aria-labelledby="operator-title">
+    <form id="operator-form" method="dialog" autocomplete="off">
+      <h2 id="operator-title">Authorize a local drill</h2>
+      <p>Viewer access is read-only. Retrieve your separate private operator token from the launcher terminal. Then approve the requested drill in that terminal.</p>
+      <p><code>cat ~/.config/ci-cd-lab/unified-console/operator.token</code></p>
+      <label for="operator-token">Local operator token</label>
+      <input id="operator-token" type="password" minlength="40" required autocomplete="off" spellcheck="false">
+      <button type="submit" value="run">Request drill</button>
+      <button type="submit" value="cancel" formnovalidate>Cancel</button>
+    </form>
+  </dialog>
 </body>
 </html>

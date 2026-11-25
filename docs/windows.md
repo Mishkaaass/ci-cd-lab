@@ -31,7 +31,7 @@ Leave PowerShell open. When the terminal prints `READY`, open **http://127.0.0.1
 wsl.exe --exec sh -lc 'cat ~/.config/ci-cd-lab/unified-console/viewer.token'
 ```
 
-When using `-Distribution`, add `-d Ubuntu-24.04` after `wsl.exe` in that command too. Do **not** paste the token into issues, screenshots or chat. In the browser, click **Live Demo → Run full showcase** to watch verified Docker Blue/Green promotion, rollback and Kubernetes GitOps reconciliation.
+When using `-Distribution`, add `-d Ubuntu-24.04` after `wsl.exe` in that command too. Do **not** paste the token into issues, screenshots or chat. In the browser, click **Live Demo → Run full showcase**, retrieve the separate private Operator token using the same WSL command with `operator.token` instead of `viewer.token`, enter it in the password dialog, and type `RUN all` in the original launcher terminal. Then watch verified Docker Blue/Green promotion, rollback and Kubernetes GitOps reconciliation.
 
 If Ubuntu asks for `sudo`, type the **Ubuntu/Linux password in PowerShell**; no characters appear as you type. Do not enter a password on the OpsBoard website.
 

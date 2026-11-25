@@ -39,6 +39,7 @@ ASSETS = {
 STATE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state")))
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
 TOKEN_FILE = CONFIG / "ci-cd-lab/unified-console/viewer.token"
+OPERATOR_TOKEN_FILE = CONFIG / "ci-cd-lab/unified-console/operator.token"
 KCFG = STATE / "opsboard-gitops-review/kubeconfig"
 CLUSTER_CONTEXT = "kind-opsboard-review"
 REPO = "Mishkaaass/ci-cd-lab"
@@ -600,6 +601,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self.check_origin_and_host() or not self.authenticated():
             self.close_connection = True
             return
+        operator = self.server.operator_token
+        supplied = self.headers.get("X-OpsBoard-Operator", "")
+        if operator is None or not hmac.compare_digest(
+            supplied.encode("utf-8"), operator.encode("utf-8")
+        ):
+            self.error(HTTPStatus.FORBIDDEN, "Separate operator token required")
+            self.close_connection = True
+            return
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
         if content_type != "application/json":
             self.error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Expected application/json")
@@ -628,7 +637,7 @@ class Handler(BaseHTTPRequestHandler):
         if directory is None or status.get("enabled") is not True:
             self.error(HTTPStatus.FORBIDDEN, "Demo operator is not enabled")
             return
-        if status.get("status") in ("queued", "running"):
+        if status.get("status") in ("queued", "running", "preparing", "waiting_auth"):
             self.error(HTTPStatus.CONFLICT, "Demo already running")
             return
         request_file = directory / "request.json"
@@ -688,8 +697,14 @@ class LocalServer(ThreadingHTTPServer):
         address: tuple[str, int],
         token: str,
         showcase_directory: Path | None = None,
+        operator_token: str | None = None,
     ):
+        if operator_token is not None and (
+            len(operator_token) < 40 or operator_token == token
+        ):
+            raise ValueError("Operator credential must be separate and strong")
         self.viewer_token = token
+        self.operator_token = operator_token if showcase_directory is not None else None
         self.showcase_directory = showcase_directory
         super().__init__(address, Handler)
 
@@ -724,7 +739,10 @@ def main() -> int:
             demo_directory = showcase.private_directory(
                 Path(os.environ["OPSBOARD_SHOWCASE_DIR"])
             )
-        with LocalServer(("127.0.0.1", args.port), token, demo_directory) as server:
+        operator = ensure_token(OPERATOR_TOKEN_FILE) if demo_directory else None
+        with LocalServer(
+            ("127.0.0.1", args.port), token, demo_directory, operator
+        ) as server:
             print(f"OpsBoard unified: http://127.0.0.1:{args.port}/")
             print(f"Viewer token (private local file): {TOKEN_FILE}")
             print("Local viewer. Privileged operations are not exposed to HTTP.")

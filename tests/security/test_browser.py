@@ -4,6 +4,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import httpx
 import pytest
 
 from tests.security_support import OPERATOR_TOKEN, VIEWER_TOKEN
+from unified_console import server, showcase
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_BROWSER_SECURITY") != "1",
@@ -172,3 +174,63 @@ def test_expiry_clears_data_even_when_api_becomes_unavailable(page, browser_app)
         "browser-marker", timeout=7000
     )
     expect(page.locator("#auth-status")).to_contain_text("expired")
+
+
+@pytest.fixture
+def unified_console_app(tmp_path, monkeypatch):
+    # Real HTTP boundary and real browser; no supervisor, Docker or Kubernetes.
+    directory = tmp_path / "showcase"
+    showcase.atomic_json(directory / "status.json", showcase.initial_status())
+    monkeypatch.setattr(server, "snapshot", lambda: {})
+    with server.LocalServer(
+        ("127.0.0.1", 0), VIEWER_TOKEN, directory, OPERATOR_TOKEN
+    ) as local:
+        thread = threading.Thread(target=local.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{local.server_address[1]}", directory
+        finally:
+            local.shutdown()
+            thread.join(timeout=3)
+
+
+def test_unified_console_operator_dialog_and_queue(page, unified_console_app):
+    from playwright.sync_api import expect
+
+    url, directory = unified_console_app
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(url)
+    page.locator("#viewer-token").fill(VIEWER_TOKEN)
+    page.locator("#unlock-button").click()
+    expect(page.locator("#shell")).to_be_visible()
+    page.locator('.nav-link[data-view="showcase"]').click()
+    run = page.locator('button[data-start="docker"]')
+    expect(run).to_be_enabled()
+    dialog = page.locator("#operator-dialog")
+    field = page.locator("#operator-token")
+    run.click()
+    expect(dialog).to_be_visible()
+    dialog.get_by_role("button", name="Cancel").click()
+    expect(dialog).not_to_be_visible()
+    assert not (directory / "request.json").exists()
+
+    for credential, status in ((VIEWER_TOKEN, 403), (OPERATOR_TOKEN, 202)):
+        expect(run).to_be_enabled()
+        run.click()
+        expect(dialog).to_be_visible()
+        field.fill(credential)
+        with page.expect_response(
+            lambda response: response.url.endswith("/api/showcase/start")
+        ) as response:
+            dialog.get_by_role("button", name="Request drill").click()
+        assert response.value.status == status
+        expect(dialog).not_to_be_visible()
+        expect(field).to_have_value("")
+        if status == 403:
+            assert not (directory / "request.json").exists()
+
+    assert showcase.read_json(directory / "request.json") == {"action": "docker"}
+    assert page.evaluate("() => localStorage.length + sessionStorage.length") == 0
+    assert page.context.cookies() == []
+    assert errors == []

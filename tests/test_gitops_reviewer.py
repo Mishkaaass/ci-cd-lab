@@ -1,9 +1,12 @@
 """Offline regression tests for isolated kind / Argo CD reviewer bootstrap."""
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 SOURCE = Path(__file__).resolve().parents[1] / "scripts/gitops-demo.sh"
 
@@ -90,10 +93,33 @@ def test_help_explains_safety_and_access(tmp_path):
     assert "GITOPS_READ_TOKEN_FILE" in result.stdout
 
 
-def test_bootstrap_keeps_kubeconfig_and_secrets_in_owned_state(tmp_path):
+@pytest.mark.parametrize("tampered", [False, True])
+def test_bootstrap_keeps_kubeconfig_and_secrets_in_owned_state(tmp_path, tampered):
     """Fake all external binaries to exercise up without Docker, internet or K8s."""
     root, env, calls = setup_gitops(tmp_path)
     original = SOURCE.parents[1]
+    real_git = shutil.which("git")
+    assert real_git is not None
+    fixture = "apiVersion: v1\n"
+    expected = subprocess.run(
+        [real_git, "hash-object", "--stdin"],
+        input=fixture,
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=5,
+    ).stdout.strip()
+    # Only the temporary script copy trusts the synthetic manifest.
+    script = root / "scripts/gitops-demo.sh"
+    content, count = re.subn(
+        r'(?m)^ARGOBLOB="[0-9a-f]{40}"$',
+        f'ARGOBLOB="{expected}"',
+        script.read_text(),
+    )
+    assert count == 1
+    script.write_text(content)
+    env["REAL_GIT"] = real_git
+    env["FAKE_ARGO_CONTENT"] = fixture + ("# tampered\n" if tampered else "")
     (root / "k8s/argocd").mkdir(parents=True)
     (root / "k8s/opsboard").mkdir(parents=True)
     shutil.copy(
@@ -146,7 +172,7 @@ set -euo pipefail
 printf 'curl called\\n' >> "$CALLS"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -o ]; then
-    printf '%s\\n' 'apiVersion: v1' > "$2"
+    printf '%s' "$FAKE_ARGO_CONTENT" > "$2"
     exit 0
   fi
   shift
@@ -154,12 +180,24 @@ done
 exit 4
 """
     )
-    (tools / "git").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (tools / "git").write_text(
+        """#!/usr/bin/env bash
+if [ "$1" = hash-object ]; then
+  exec "$REAL_GIT" "$@"
+fi
+exit 0
+"""
+    )
     for tool in ("kind", "kubectl", "curl", "git"):
         (tools / tool).chmod(0o755)
 
     # Every secret and the cluster marker lives in a temporary state directory.
     result = run_gitops(root, env, "up")
+    if tampered:
+        assert result.returncode != 0
+        assert "manifest failed immutable Git blob verification" in result.stderr
+        assert "--force-conflicts -f" not in calls.read_text()
+        return
     assert result.returncode == 0, result.stdout + result.stderr
     state = tmp_path / "state/opsboard-gitops-review"
     assert (state / "kubeconfig").read_text().strip() == "mock-cluster-config"

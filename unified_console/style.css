@@ -172,3 +172,26 @@ main{padding:45px 46px 65px;max-width:1650px;margin:0 auto;min-height:calc(100vh
 .learning-bottom{margin-top:18px;font-size:11px;color:#91a6b1;line-height:1.7}
 @media(max-width:1000px){.learning-layout{grid-template-columns:minmax(0,1fr)}.learning-modules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.learning-page .page-intro{flex-direction:column}.learning-score{width:100%}.learning-modules{grid-template-columns:minmax(0,1fr)}.learning-workspace{padding:17px}.learning-header{flex-direction:column}.learning-footer button:last-child{margin-left:0}}
+
+/* Separate credential dialog: no external assets or stored credentials. */
+#operator-dialog {
+  width: min(480px, 90vw);
+  padding: 24px;
+  border: 1px solid #596776;
+  border-radius: 12px;
+  background: #121a24;
+  color: #eef2f6;
+}
+#operator-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+#operator-dialog form { display: grid; gap: 12px; }
+#operator-dialog code { overflow-wrap: anywhere; }
+#operator-dialog input, #operator-dialog button {
+  padding: 10px 12px;
+  border: 1px solid #596776;
+  border-radius: 6px;
+  color: inherit;
+  background: #202d3b;
+}
+#operator-dialog button:focus-visible, #operator-dialog input:focus-visible {
+  outline: 2px solid #9fc7ff;
+}

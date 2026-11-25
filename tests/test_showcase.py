@@ -133,8 +133,11 @@ class TestBrowserBoundary(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.directory = Path(self.tmp.name)
         self.token = "C" * 60
+        self.operator = "O" * 60
         showcase.atomic_json(self.directory / "status.json", showcase.initial_status())
-        self.web = server.LocalServer(("127.0.0.1", 0), self.token, self.directory)
+        self.web = server.LocalServer(
+            ("127.0.0.1", 0), self.token, self.directory, self.operator
+        )
         self.t = threading.Thread(target=self.web.serve_forever, daemon=True)
         self.t.start()
         self.port = self.web.server_address[1]
@@ -156,6 +159,7 @@ class TestBrowserBoundary(unittest.TestCase):
     def auth(self):
         return {
             "Authorization": "Bearer " + self.token,
+            "X-OpsBoard-Operator": self.operator,
             "Content-Type": "application/json",
             "Origin": f"http://127.0.0.1:{self.port}",
         }
@@ -166,6 +170,23 @@ class TestBrowserBoundary(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertTrue(json.loads(data)["enabled"])
         self.assertNotIn(self.token.encode(), data)
+
+    def test_viewer_cannot_queue_drill(self):
+        for value in ("", self.token, "wrong"):
+            headers = {**self.auth(), "X-OpsBoard-Operator": value}
+            code, _ = self.call(
+                "POST", "/api/showcase/start", b'{"action":"docker"}', headers
+            )
+            self.assertEqual(code, 403)
+            self.assertFalse((self.directory / "request.json").exists())
+
+    def test_operator_alone_cannot_read(self):
+        code, _ = self.call(
+            "GET",
+            "/api/showcase/status",
+            headers={"Authorization": "Bearer " + self.operator},
+        )
+        self.assertEqual(code, 401)
 
     def test_only_whitelisted_action_can_be_queued(self):
         code, _ = self.call(
@@ -248,6 +269,27 @@ class TestBrowserBoundary(unittest.TestCase):
         view = server.LocalServer(("127.0.0.1", 0), self.token)
         self.assertIsNone(view.showcase_directory)
         view.server_close()
+
+
+class TestTerminalConsent(unittest.TestCase):
+    def test_noninteractive_and_unknown_action_fail_closed(self):
+        with patch.object(showcase.sys.stdin, "isatty", return_value=False):
+            with patch("builtins.input") as prompt:
+                self.assertFalse(showcase.approve_drill("docker"))
+                prompt.assert_not_called()
+        with patch("builtins.input") as prompt:
+            self.assertFalse(showcase.approve_drill("unknown"))
+            prompt.assert_not_called()
+
+    def test_exact_action_requires_explicit_approval(self):
+        with patch.object(showcase.sys.stdin, "isatty", return_value=True):
+            for answer in ("", "YES", "RUN gitops"):
+                with patch("builtins.input", return_value=answer):
+                    self.assertFalse(showcase.approve_drill("docker"))
+            with patch("builtins.input", return_value="RUN docker"):
+                self.assertTrue(showcase.approve_drill("docker"))
+            with patch("builtins.input", side_effect=EOFError):
+                self.assertFalse(showcase.approve_drill("docker"))
 
 
 if __name__ == "__main__":

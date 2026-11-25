@@ -30,7 +30,7 @@ When ready for both local deployment drills, stop the viewer with `Ctrl+C`, conf
 make showcase
 ```
 
-Open `http://127.0.0.1:18002/`, read `~/.config/ci-cd-lab/unified-console/viewer.token` **locally** and unlock. The Viewer token is private; do not share it. The full showcase may request a **Linux sudo password in the foreground terminal** to access Docker, never in the browser. Click the explicit **Live Demo** action to run Docker/GitOps drills. Stop the launcher with `Ctrl+C`; Compose volumes and Kubernetes PVC are preserved.
+Open `http://127.0.0.1:18002/`, read `~/.config/ci-cd-lab/unified-console/viewer.token` **locally** and unlock. The Viewer token is private; do not share it. The full showcase may request a **Linux sudo password in the foreground terminal** to access Docker, never in the browser. Click the explicit **Live Demo** action, enter the separate private Operator token (`cat ~/.config/ci-cd-lab/unified-console/operator.token`), and confirm `RUN all`, `RUN docker`, or `RUN gitops` in the original terminal to run Docker/GitOps drills. Stop the launcher with `Ctrl+C`; Compose volumes and Kubernetes PVC are preserved.
 
 > **Don't launch `make viewer` and `make showcase` together:** both use port `18002`. If a port is occupied, stop your own earlier instance. Never kill unknown processes or delete Docker volumes to free a port.
 
