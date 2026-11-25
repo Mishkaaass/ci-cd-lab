@@ -10,7 +10,7 @@ Through an interactive dashboard with **live deployment events, real CI results,
 
 *Developed by Moshe Bogo*
 
-[![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest)
+[![CI](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/ci.yml) [![CD](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml/badge.svg)](https://github.com/Mishkaaass/ci-cd-lab/actions/workflows/cd.yml) [![Release](https://img.shields.io/github/v/release/Mishkaaass/ci-cd-lab)](https://github.com/Mishkaaass/ci-cd-lab/releases/latest) [![License: MIT](https://img.shields.io/github/license/Mishkaaass/ci-cd-lab)](LICENSE)
 ![OpsBoard Guided Journey homepage](docs/assets/opsboard-guided-home.png)
 
 *Preview data is illustrative. Live results are read from the actual local labs and GitHub Actions.*
@@ -122,7 +122,7 @@ The launcher verifies Docker Desktop, sets up Python 3.14 and the Kubernetes too
 
 ```mermaid
 flowchart LR
-  PR[Pull request] --> CI[7 CI gates] --> Main[Protected main]
+  PR[Pull request] --> CI[7 CI gates] --> Main[Reviewed main]
   Main --> CD[CD: scan + SBOM + provenance] --> GHCR[Verified GHCR digest]
   GHCR -.->|reviewed manifest PR| Argo[Argo CD] --> K8s[Dedicated kind cluster]
   Main -.->|separate local demo| Docker[Docker Blue/Green]
@@ -155,7 +155,7 @@ flowchart LR
 
 ## Security, by design
 
-- **Before merge:** Seven required CI gates cover Python tests, code quality, dependencies, secrets, containers, browser/API security and an isolated API attack scan. `main` is protected.
+- **Before merge:** Seven CI gates cover Python tests, code quality, dependencies, secrets, containers, browser/API security and an isolated API attack scan. Required status checks and branch protection must be configured in GitHub Settings; CI results alone do not prove that branch protection is enabled.
 - **Supply chain:** Gitleaks, dependency auditing, Trivy image policy, SBOM, provenance and immutable image digest verification. The `latest` tag is not the deployment identity.
 - **Release safety:** Readiness and exact release identity checks; Nginx configuration is validated before switching; rollback verifies the original deployment.
 - **Access:** Local `127.0.0.1` only; private Viewer token, content security policy (CSP), host/origin checks and no exposed Docker socket. The normal dashboard is read-only.
@@ -183,3 +183,5 @@ flowchart LR
 **Details for engineers:** [Unified runbook](docs/unified-console.md) · [Docker walkthrough](docs/demo-docker-blue-green.md) · [GitOps walkthrough](docs/demo-kubernetes-argocd.md) · [GitOps runbook](docs/kubernetes-gitops.md) · [Security model](docs/security-lab.md) · [CI](.github/workflows/ci.yml) · [CD](.github/workflows/cd.yml) · [Releases](https://github.com/Mishkaaass/ci-cd-lab/releases)
 
 **Release policy:** Existing release tags and pinned Kubernetes images are not rewritten by this documentation change. A merge into `main` may still run the existing CD and update the mutable `latest` tag.
+
+**License:** [MIT](LICENSE) · Copyright © 2026 Moshe Bogo. Demo environment only; users remain responsible for protecting their own Docker/Kubernetes credentials and data.
