@@ -72,6 +72,16 @@ jobs:
       - name: Check reviewer and GitOps shell scripts
         run: bash -n scripts/reviewer.sh scripts/gitops-demo.sh scripts/lab.sh
 
+      - name: Verify first-time reviewer setup in isolated Python venv
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash scripts/requirements.sh
+          make setup
+          .venv/bin/python -c 'import sys; assert sys.prefix != sys.base_prefix and sys.version_info[:2] == (3,14)'
+          .venv/bin/python -c 'import importlib.util; assert importlib.util.find_spec("fastapi") is None'
+          echo '[PASS] Clean project venv created, no host app packages installed.'
+
       - name: Run automated tests
         run: python -m pytest -v
 
