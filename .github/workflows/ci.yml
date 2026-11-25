@@ -136,6 +136,12 @@ jobs:
       - name: Download repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Inspect official runtime image manifests
+        run: |
+          docker buildx imagetools inspect python:3.14-slim@sha256:22eafb370920ad8b429e0aec3fff433e0669968519f5d60469d83729c138b28b
+          docker buildx imagetools inspect postgres:18.6-alpine3.24@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+          docker buildx imagetools inspect nginx:stable-alpine3.24
+
       - name: Build application and Blue/Green demo Docker images
         run: |
           docker build -t ci-cd-lab:ci .
@@ -145,7 +151,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image="docker.io/aquasec/trivy:0.76.2"
+          image="docker.io/aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
           docker pull "$image"
           docker image inspect "$image" --format '{{json .RepoDigests}}'
           install -d "${RUNNER_TEMP}/trivy-bin"

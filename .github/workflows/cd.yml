@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image="docker.io/aquasec/trivy:0.76.2"
+          image="docker.io/aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
           docker pull "$image"
           docker image inspect "$image" --format '{{json .RepoDigests}}'
           install -d "${RUNNER_TEMP}/trivy-bin"

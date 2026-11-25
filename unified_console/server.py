@@ -637,7 +637,7 @@ class Handler(BaseHTTPRequestHandler):
         if directory is None or status.get("enabled") is not True:
             self.error(HTTPStatus.FORBIDDEN, "Demo operator is not enabled")
             return
-        if status.get("status") in ("queued", "running"):
+        if status.get("status") in ("queued", "running", "preparing", "waiting_auth"):
             self.error(HTTPStatus.CONFLICT, "Demo already running")
             return
         request_file = directory / "request.json"

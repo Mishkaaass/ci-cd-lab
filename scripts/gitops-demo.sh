@@ -11,7 +11,10 @@ STATE="${XDG_STATE_HOME:-$HOME/.local/state}/opsboard-gitops-review"
 KCFG="$STATE/kubeconfig"
 OWNER="$STATE/control-plane-id"
 ARGOVERSION="v3.6.1" # A pinned, supported release, not a mutable 'stable' URL.
-ARGOMANIFEST="https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOVERSION/manifests/install.yaml"
+ARGOCOMMIT="94037c4d4e1af4bd0651d37a179fbd9e347e668c"
+# GitHub official release tree: manifests/install.yaml, verified Git blob ID.
+ARGOBLOB="05dc1aff215e42e14c393287b06d743645492f81"
+ARGOMANIFEST="https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCOMMIT/manifests/install.yaml"
 ORIGINAL_REPO="https://github.com/Mishkaaass/ci-cd-lab.git"
 
 fail() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
@@ -293,6 +296,8 @@ up() {
   info "Installing pinned Argo CD $ARGOVERSION in the isolated cluster..."
   curl --fail --silent --show-error --location --retry 3 --max-time 120 \
     "$ARGOMANIFEST" -o "$STATE/argocd-install.yaml"
+  [ "$(git hash-object --no-filters "$STATE/argocd-install.yaml")" = "$ARGOBLOB" ] ||
+    fail "Argo CD install manifest failed immutable Git blob verification; not applied"
   kube -n argocd apply --server-side --force-conflicts -f "$STATE/argocd-install.yaml" >/dev/null
   kube -n argocd rollout status deployment/argocd-server --timeout=360s
   kube -n argocd rollout status deployment/argocd-repo-server --timeout=360s
