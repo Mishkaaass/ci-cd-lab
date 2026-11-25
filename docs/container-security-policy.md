@@ -23,7 +23,8 @@ upstream review. Buildx SBOM and provenance attestations remain enabled.
 
 The application and Blue/Green demo base are pinned to the exact Python image
 digest observed in successful CI. PostgreSQL uses the same digest-pinned
-upstream image as the tested Kubernetes and security environments. Argo CD's
+upstream image as the tested Kubernetes and security environments. Nginx is
+pinned to the official multi-platform image index inspected by CI. Argo CD's
 installation URL pins the official release commit and checks the downloaded
 manifest against that release's Git blob ID before applying it. A manifest
 integrity check is not a signature or a vulnerability scan of every image.

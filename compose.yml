@@ -86,7 +86,7 @@ services:
 
 
   nginx:
-    image: nginx:stable-alpine3.24
+    image: nginx:stable-alpine3.24@sha256:8eb2b5540eae779603cc3db84b3986a15ecb5308b54303146eee9837c137b51a
 
     ports:
       - "127.0.0.1:8080:80"
