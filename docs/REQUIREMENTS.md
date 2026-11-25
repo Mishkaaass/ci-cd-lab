@@ -1,11 +1,11 @@
 # Run requirements — OpsBoard reviewer
 
-This repository has **two independent hands-on labs** and one browser console. Pick your starting path. **Only the `make showcase` path prepares live containers and a dedicated Kubernetes cluster.**
+This repository has **two independent hands-on labs** and one browser console. Pick your starting path. **Viewer mode starts no containers; the Docker Blue/Green path prepares only Compose services; the full showcase can also prepare a dedicated Kubernetes cluster.**
 
 | Path | Required on the host | Command | Side effects |
 |---|---|---|---|
 | **Read-only Unified Console** | Linux, Python **3.14** with `venv`, Bash/Make, browser | `make requirements` → `make setup` → `make viewer` | Creates `.venv/` and a private viewer token; **no Docker builds/deployments** |
-| **Docker Blue/Green only** | Above + Git, curl, Docker Engine and Compose v2, terminal access to Docker (possibly `sudo`) | `bash scripts/reviewer.sh doctor` → `bash scripts/reviewer.sh dashboard` (Terminal A), `bash scripts/reviewer.sh up` (Terminal B), `bash scripts/reviewer.sh drill` | Creates local Compose containers/volumes; deliberately changes **demo** traffic |
+| **Docker Blue/Green only** | Above + Git, curl, Docker Engine and **Docker Compose v2**, terminal access to Docker (possibly `sudo`) | `bash scripts/reviewer.sh doctor` → `bash scripts/reviewer.sh dashboard` (Terminal A), `bash scripts/reviewer.sh up` (Terminal B), `bash scripts/reviewer.sh drill` | Creates local Compose containers/volumes; deliberately changes **demo** traffic |
 | **Full Guided Showcase** | Above + `kind`, `kubectl`, internet and enough RAM/disk for local Kubernetes/Argo CD | `make showcase` (or `bash scripts/showcase.sh`) | Starts/repairs local Docker services, may create dedicated kind cluster, and runs fixed drills **after explicit UI action** |
 | **Windows (Ubuntu WSL 2)** | WSL 2 Ubuntu + Docker Desktop with Linux containers/WSL integration + browser | PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-showcase.ps1` | May request approval for Ubuntu packages; uses WSL-scoped Python, Docker and own kind cluster |
 | **Contributing / Python tests** | Python **3.14** + `venv`, internet for PyPI | `make setup-dev` then `.venv/bin/python -m pytest` | Installs pinned `requirements-dev.txt` **only into `.venv`**, not system Python |
