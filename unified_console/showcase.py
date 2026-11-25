@@ -828,9 +828,7 @@ def approve_drill(action: str) -> bool:
     if action not in ACTIONS or not sys.stdin.isatty():
         return False
     try:
-        answer = input(
-            f"Approve local {action} drill? Type RUN {action} to proceed: "
-        )
+        answer = input(f"Approve local {action} drill? Type RUN {action} to proceed: ")
     except EOFError:
         return False
     return answer == f"RUN {action}"
