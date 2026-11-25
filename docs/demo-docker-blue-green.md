@@ -18,7 +18,7 @@ flowchart LR
 ## Before you start
 
 - **Linux** machine with Git, Bash and `curl`.
-- **Python 3.14** (including `venv`), **Docker Engine** and **Docker Compose** plugin installed and running.
+- **Python 3.14** with `venv`, **Docker Engine** and **Docker Compose v2** installed and running. Run `make requirements` first (read-only), then `make setup` to create/reuse the project-local `.venv` with **no pip installations**.
 - Ports `18001` (dashboard), `8080` (Nginx), `5432` (PostgreSQL), `8001` and `8002` available.
 - Docker permissions. If your user requires `sudo docker`, run `sudo -v` in the terminal where you run deployment commands.
 
@@ -27,6 +27,8 @@ flowchart LR
 ```bash
 git clone https://github.com/Mishkaaass/ci-cd-lab.git
 cd ci-cd-lab
+make requirements
+make setup
 bash scripts/reviewer.sh doctor
 ```
 
@@ -37,6 +39,8 @@ Check the output: if a requirement is shown as `MISSING`, install it **before co
 ```bash
 bash scripts/reviewer.sh dashboard
 ```
+
+This **legacy FastAPI history API** may install pinned packages from `requirements-dev.txt` into `.venv` when started, including on a first run. It does **not** install packages globally. For a lighter console without installing application dependencies, use `make viewer` instead.
 
 Wait for `Uvicorn running on http://127.0.0.1:18001`. **Leave Terminal A open.** Open [http://127.0.0.1:18001/dashboard](http://127.0.0.1:18001/dashboard).
 
@@ -86,4 +90,4 @@ The failed **candidate** in step 1 is **intentional**; the full `drill` must end
 
 **Something fails?** See [Troubleshooting](reviewer-tour.md). If ports are occupied or containers belong to a different checkout, inspect them first; the scripts intentionally stop instead of taking over someone else's services.
 
-[← Back to main README](../README.md)
+[RUN REQUIREMENTS](REQUIREMENTS.md) · [← Back to main README](../README.md)

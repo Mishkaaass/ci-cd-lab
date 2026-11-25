@@ -19,7 +19,7 @@ flowchart TB
 
 ## Before you start
 
-- **Linux** with Git, Bash, `curl` and internet access.
+- **Linux** with Git, Bash, `curl`, Python 3 (standard library) and internet access. `make requirements` inventories host tools read-only. Python 3.14 + `.venv` is for the combined Unified Console, **not required merely to run kubectl/kind**.
 - Working **Docker Engine**, **kind** and **kubectl**. Install kind and kubectl from their [official](https://kind.sigs.k8s.io/docs/user/quick-start/) [guides](https://kubernetes.io/docs/tasks/tools/).
 - Free local ports `18080` (Argo CD) and `18081` (OpsBoard).
 - Enough free resources to run a Kubernetes control plane, Argo CD, OpsBoard and PostgreSQL.
@@ -37,6 +37,7 @@ Already cloned it for Demo 1? Just use the same directory. You **do not need** t
 ### 2. Check requirements, then create the lab
 
 ```bash
+make requirements         # optional read-only inventory; reports tools by lab
 bash scripts/gitops-demo.sh doctor
 bash scripts/gitops-demo.sh up
 ```
@@ -101,4 +102,4 @@ The test temporarily changes the OpsBoard Deployment from **1 replica to 2**. Gi
 
 **Trouble?** See [Troubleshooting](reviewer-tour.md) for `ImagePullBackOff`, `OutOfSync`, access and port issues.
 
-[← Back to main README](../README.md)
+[RUN REQUIREMENTS](REQUIREMENTS.md) · [← Back to main README](../README.md)

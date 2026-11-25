@@ -6,8 +6,8 @@ to the internet. All UI ports bind to `127.0.0.1`.
 
 ## Five-minute local demo
 
-1. `bash scripts/reviewer.sh doctor` — check Python 3.14, Docker and tools.
-2. Terminal A: `bash scripts/reviewer.sh dashboard` — local authenticated FastAPI.
+1. `make requirements` — inspect required and optional host tools read-only; `make setup` creates a project-local Python 3.14 `.venv` without downloading packages. See [RUN REQUIREMENTS](REQUIREMENTS.md). Then run `bash scripts/reviewer.sh doctor` for the legacy Docker dashboard.
+2. Terminal A: `bash scripts/reviewer.sh dashboard` — local authenticated FastAPI. This **may install `requirements-dev.txt` into `.venv`** on first use; it never needs `sudo pip` or system-wide Python packages.
 3. Terminal B: `bash scripts/reviewer.sh up` — Compose DB, blue, green, Nginx.
 4. Open `http://127.0.0.1:18001/dashboard` and unlock using a local viewer token.
 5. `bash scripts/reviewer.sh drill` — intentionally broken, then healthy, then rollback.

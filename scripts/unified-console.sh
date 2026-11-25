@@ -1,15 +1,36 @@
 #!/usr/bin/env bash
-# Unified OpsBoard — local read-only viewer. Does not start/stop Docker or Kubernetes.
+# Viewer-only mode. Does not start Docker, kind or Kubernetes operations.
+# Serves using project .venv; doctor/token stay read-only when no venv exists.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-PYTHON_BIN="$(command -v python3.14 || command -v python3)"
-if [[ -z "$PYTHON_BIN" ]]; then
-  echo 'ERROR: Python 3 is required' >&2
-  exit 1
-fi
 case "${1:-serve}" in
-  serve|doctor|token) exec "$PYTHON_BIN" -m unified_console.server "${1:-serve}" ;;
-  help|-h|--help) printf 'Usage: bash scripts/unified-console.sh [serve|doctor|token]\n';;
-  *) echo 'ERROR: Supported commands are serve, doctor, token' >&2; exit 2 ;;
+  help|-h|--help)
+    printf 'Usage: bash scripts/unified-console.sh [serve|doctor|token]\n'
+    exit 0
+    ;;
+  serve)
+    bash scripts/setup-venv.sh
+    exec "$ROOT/.venv/bin/python" -m unified_console.server serve
+    ;;
+  doctor|token)
+    if [[ -x "$ROOT/.venv/bin/python" ]]; then
+      PYTHON_BIN="$ROOT/.venv/bin/python"
+    else
+      PYTHON_BIN="$(command -v python3.14 || command -v python3 || true)"
+    fi
+    [[ -n "$PYTHON_BIN" ]] || {
+      echo '[BLOCK] Python 3.11+ is required. See make requirements.' >&2
+      exit 2
+    }
+    "$PYTHON_BIN" -c 'import sys; assert sys.version_info >= (3,11)' || {
+      echo '[BLOCK] Python 3.11+ is required for read-only diagnostics.' >&2
+      exit 2
+    }
+    exec "$PYTHON_BIN" -m unified_console.server "$1"
+    ;;
+  *)
+    echo 'ERROR: Supported commands are serve, doctor, token' >&2
+    exit 2
+    ;;
 esac

@@ -20,8 +20,10 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
        libpcre2-8-0 \
        libsqlite3-0 \
        perl-base \
+       libzstd1 \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 3.0.4 \
-    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg7.0)" ge 3.0.4
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg7.0)" ge 3.0.4 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libzstd1)" ge 1.5.7+dfsg-1+deb13u1
 
 COPY requirements.txt .
 

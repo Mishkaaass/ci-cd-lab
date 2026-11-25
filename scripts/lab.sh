@@ -64,16 +64,10 @@ start_dashboard() {
   umask 077
   mkdir -p "$CONFIG_PARENT"
   chmod 700 "$CONFIG_PARENT"
-  if [ ! -x .venv/bin/python ]; then
-    if [ -e .venv ]; then
-      stop "an existing .venv is incomplete; preserved, please inspect it"
-    fi
-    printf '\n[1/3] Creating Python 3.14 environment...\n'
-    python3.14 -m venv .venv
-  fi
-  .venv/bin/python -c 'import sys; assert sys.version_info[:2] == (3,14), "venv is not Python 3.14"' || {
-    stop "the existing .venv uses the wrong Python version; it was not modified"
-  }
+  # Use the same non-destructive setup guard as the new viewer/showcase.
+  # Never pip-install into an existing symlink, incomplete or foreign venv.
+  printf '\n[1/3] Validating isolated Python environment...\n'
+  bash scripts/setup-venv.sh
   printf '\n[2/3] Installing/checking Python dependencies...\n'
   .venv/bin/python -m pip install -q -r requirements-dev.txt
   if [ ! -d "$LAB_DIR" ]; then

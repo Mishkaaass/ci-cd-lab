@@ -1,5 +1,11 @@
 FROM python:3.14-slim
 
+# Keep Blue/Green demo on the same fixed Debian zstd revision as OpsBoard.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade libzstd1 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libzstd1)" ge 1.5.7+dfsg-1+deb13u1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -7,9 +13,13 @@ ENV PYTHONUNBUFFERED=1
 
 COPY requirements-demo.txt .
 
+# pip and its vendored libraries are build-time tools, not runtime dependencies.
+# Remove them from the final container after validating installed dependencies.
 RUN python -m pip install \
     --no-cache-dir \
-    -r requirements-demo.txt
+    -r requirements-demo.txt \
+    && python -m pip check \
+    && python -m pip uninstall --yes pip
 
 COPY demo_service ./demo_service
 

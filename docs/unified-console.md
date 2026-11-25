@@ -6,11 +6,11 @@ OpsBoard observes two independent local labs. Docker Blue/Green proves that an u
 
 ## One-command reviewer experience
 
-From the repository root on Linux, run `bash scripts/showcase.sh`, keep that terminal open, and visit `http://127.0.0.1:18002/`. Read the private Viewer token locally with `cat ~/.config/ci-cd-lab/unified-console/viewer.token`, unlock, and open **Live demo**. Select **Run full showcase** or an individual drill. The retained event stream shows the actual **Blue → Green → Blue** switch and the separate **1 → 2 → 1** GitOps recovery. Click **Pipeline & security** to inspect the latest real CI jobs.
+From the repository root on Linux, run `make requirements` (read-only), `make setup` (creates/reuses project `.venv` with Python 3.14), then `make showcase` (also available as `bash scripts/showcase.sh`). Keep the launch terminal open and visit `http://127.0.0.1:18002/`. **The Unified Console itself needs only Python's standard library; the legacy Docker history API may install pinned `requirements-dev.txt` inside `.venv` on first use, and Docker images install their own Python packages in containers.** See [RUN REQUIREMENTS](REQUIREMENTS.md). Read the private Viewer token locally with `cat ~/.config/ci-cd-lab/unified-console/viewer.token`, unlock, and open **Live demo**. Select **Run full showcase** or an individual drill. The retained event stream shows the actual **Blue → Green → Blue** switch and the separate **1 → 2 → 1** GitOps recovery. Click **Pipeline & security** to inspect the latest real CI jobs.
 
 The launcher can re-use the existing Docker demo (including a verified `demo1-*` checkout) and connects the port `18001` history API if it is not already active. It will start the demo Compose services when they are offline. Kubernetes remains an independent setup; bootstrap it once using `bash scripts/gitops-demo.sh up` if needed.
 
-`bash scripts/unified-console.sh serve` provides the alternative **read-only** viewer without starting labs or allowing demo requests. Its `doctor` mode reports CLI prerequisites. Ordinary viewers can inspect environment state, but no Docker or Kubernetes command is issued.
+`make viewer` (equivalent to `bash scripts/unified-console.sh serve`) provides the alternative **read-only** viewer under `.venv/bin/python` without starting labs, installing third-party packages or allowing demo requests. Its `doctor` mode reports CLI prerequisites. Ordinary viewers can inspect environment state, but no Docker or Kubernetes command is issued.
 
 ## What does a live drill change?
 

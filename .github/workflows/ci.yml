@@ -72,6 +72,16 @@ jobs:
       - name: Check reviewer and GitOps shell scripts
         run: bash -n scripts/reviewer.sh scripts/gitops-demo.sh scripts/lab.sh
 
+      - name: Verify first-time reviewer setup in isolated Python venv
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash scripts/requirements.sh
+          make setup
+          .venv/bin/python -c 'import sys; assert sys.prefix != sys.base_prefix and sys.version_info[:2] == (3,14)'
+          .venv/bin/python -c 'import importlib.util; assert importlib.util.find_spec("fastapi") is None'
+          echo '[PASS] Clean project venv created, no host app packages installed.'
+
       - name: Run automated tests
         run: python -m pytest -v
 
@@ -126,8 +136,10 @@ jobs:
       - name: Download repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Build Docker image
-        run: docker build -t ci-cd-lab:ci .
+      - name: Build application and Blue/Green demo Docker images
+        run: |
+          docker build -t ci-cd-lab:ci .
+          docker build -f Dockerfile.demo -t opsboard-demo:ci .
 
       - name: Set up Trivy (official container image)
         shell: bash
@@ -147,10 +159,12 @@ jobs:
       - name: Check Kubernetes configuration
         run: trivy config --severity HIGH,CRITICAL --exit-code 1 k8s
 
-      - name: Check container security policy
-        env:
-          IMAGE: ci-cd-lab:ci
-        run: sh scripts/scan-image.sh "$IMAGE"
+      - name: Check security policy for BOTH app and demo images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sh scripts/scan-image.sh ci-cd-lab:ci
+          sh scripts/scan-image.sh opsboard-demo:ci
 
   application-security:
     name: API and browser security

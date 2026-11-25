@@ -9,8 +9,12 @@ from real local actions rather than pretending every click triggers a pipeline.
 From the repository root on a supported Linux lab, run:
 
 ```bash
-bash scripts/showcase.sh
+make requirements
+make setup
+make showcase
 ```
+
+`bash scripts/showcase.sh` is an equivalent direct launcher and now bootstraps the same isolated Python 3.14 `.venv`. For **viewer-only** exploration without Docker/kind setup or third-party Python packages, use `make viewer` instead. See [RUN REQUIREMENTS](REQUIREMENTS.md) before the full demo.
 
 Open `http://127.0.0.1:18002/`, unlock with the **local Viewer Token**, and
 follow the **Guided journey** (the first page after login). Keep the launcher

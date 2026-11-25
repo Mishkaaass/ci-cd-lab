@@ -23,7 +23,7 @@ If your WSL Ubuntu is named something like `Ubuntu-24.04` and is **not** the def
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-showcase.ps1 -Distribution Ubuntu-24.04
 ```
 
-On first use, the launcher checks Docker Desktop and asks before installing missing Ubuntu packages. It installs Python 3.14 **for your WSL user only** (without changing system Python), and downloads checksum-verified `kind` and `kubectl` to `~/.local/bin`. It clones the project into **Ubuntu's filesystem** for reliable Linux file permissions and Docker mounts. The first run can take considerably longer than five minutes.
+On first use, the launcher checks Docker Desktop and asks before installing missing Ubuntu packages. It installs Python 3.14 **for your WSL user only** (without changing system Python), and downloads checksum-verified `kind` and `kubectl` to `~/.local/bin`. It clones the project into **Ubuntu's filesystem** for reliable Linux file permissions and Docker mounts. The Linux `scripts/showcase.sh` launcher then creates/reuses **`ci-cd-lab/.venv` with Python 3.14**, without replacing Ubuntu's system Python. The console itself uses the standard library, while the legacy history API may install pinned dependencies **inside the venv**. See [RUN REQUIREMENTS](REQUIREMENTS.md) for the separation between venv, Docker Desktop and kind. The first run can take considerably longer than five minutes.
 
 Leave PowerShell open. When the terminal prints `READY`, open **http://127.0.0.1:18002/** in your **Windows browser**. To view the local Viewer token, open a second PowerShell window and run:
 
