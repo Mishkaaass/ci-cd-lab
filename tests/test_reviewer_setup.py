@@ -23,7 +23,13 @@ def test_reviewer_shell_syntax() -> None:
 
 def test_makefile_offers_clear_isolated_modes() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    for target in ("requirements:", "setup:", "setup-dev:", "viewer: setup", "showcase: setup"):
+    for target in (
+        "requirements:",
+        "setup:",
+        "setup-dev:",
+        "viewer: setup",
+        "showcase: setup",
+    ):
         assert target in makefile
     assert "scripts/requirements.sh" in makefile
     assert "scripts/setup-venv.sh" in makefile
