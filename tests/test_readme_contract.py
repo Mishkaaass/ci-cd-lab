@@ -32,3 +32,18 @@ def test_quickstart_commands_and_gitops_demo_are_real():
     assert readme.count("```mermaid") >= 2
     assert "separate paths" in readme
     assert "private" in readme.lower()
+
+
+def test_os_specific_setup_routes_preserve_security_boundaries():
+    readme = (ROOT / "README.md").read_text()
+    for heading in ("## Linux", "## Windows", "## macOS"):
+        assert heading in readme
+    for name in ("linux.md", "windows.md", "macos.md"):
+        assert (ROOT / "docs" / name).is_file()
+    mac = (ROOT / "docs/macos.md").read_text()
+    assert "make viewer" in mac
+    assert "make showcase" in mac
+    assert "Ubuntu" in mac
+    assert "127.0.0.1:18002" in mac
+    assert "operator.token" in readme
+    assert "RUN all" in readme

@@ -27,7 +27,7 @@ OpsBoard answers three practical questions:
 
 The **Unified Console** displays live status, a persistent evidence timeline, **Live terminal** output and real GitHub Actions results. Docker and Kubernetes follow **separate paths**: they are independent demonstrations, not two copies of the same application deployment.
 
-> **Scope:** Local Linux lab, also supported from Windows through Ubuntu WSL 2 + Docker Desktop; not an AWS/EKS or internet-facing production environment. CI publishing a scanned container to GHCR **does not automatically deploy it to Kubernetes**. Kubernetes uses an independently reviewed, digest-pinned GitOps manifest.
+> **Scope:** Local Linux lab, with a Windows Ubuntu WSL 2 route and a macOS native viewer / Ubuntu route; not an AWS/EKS or internet-facing production environment. CI publishing a scanned container to GHCR **does not automatically deploy it to Kubernetes**. Kubernetes uses an independently reviewed, digest-pinned GitOps manifest.
 
 ## Guided Experience — understand the full delivery lifecycle
 
@@ -57,7 +57,8 @@ OpsBoard has a **read-only browser console** and **two independent hands-on labs
 | **Explore the architecture and console** | Linux, Python **3.14 + venv**, Bash/Make, browser | `make requirements` → `make setup` → `make viewer` |
 | **Run Docker Blue/Green** | Above + Docker Engine/Compose v2, Git, curl and authorized Docker access | [Docker walkthrough](docs/demo-docker-blue-green.md) |
 | **Run the full showcase (Docker + GitOps)** | Above + `kind`, `kubectl`, internet and sufficient RAM/disk | `make showcase` |
-| **Use Windows** | Ubuntu WSL 2 + Docker Desktop WSL integration | [Windows walkthrough](docs/windows.md) |
+| **Use Windows** | Ubuntu WSL 2; Docker Desktop WSL integration for live drills | [Windows walkthrough](docs/windows.md) |
+| **Use macOS** | Python 3.14 for native viewer; Ubuntu for the full Linux lab | [macOS walkthrough](docs/macos.md) |
 | **Develop or run Python tests** | Python 3.14 + venv and PyPI access | `make setup-dev`; `.venv/bin/python -m pytest` |
 
 **Exact prerequisites, ports, Python requirements files, security boundaries and troubleshooting:** [RUN REQUIREMENTS](docs/REQUIREMENTS.md).
@@ -65,6 +66,20 @@ OpsBoard has a **read-only browser console** and **two independent hands-on labs
 `make setup` creates or reuses `.venv` **without downloading Python packages**. The Unified Console and its supervisor use only the Python standard library. The **legacy FastAPI history API** can install the pinned `requirements-dev.txt` *inside that same venv* when started; Docker images install their own dependencies **inside containers**. A Python venv does **not** install Docker, PostgreSQL, `kind` or `kubectl`. Never use `sudo pip` or change system Python.
 
 ## 5-minute recruiter demo — start here
+
+Choose the operating system you are using. The browser console and the full live lab have different requirements.
+
+| Your OS | Browser viewer | Full live Docker / GitOps demo |
+| --- | --- | --- |
+| **Linux** | Native | Native Ubuntu/Linux (reference CI platform) |
+| **Windows** | Ubuntu WSL 2 | Ubuntu WSL 2 + Docker Desktop |
+| **macOS** | Native Python (Intel / Apple silicon) | Ubuntu VM or dedicated Linux host |
+
+Windows and macOS routes are documented separately; the full cross-platform runtime has not been independently verified on every OS/CPU combination. CI validates the Linux reference environment.
+
+## Linux — native Ubuntu / Debian
+
+For an installation checklist and official tool links, see [Linux prerequisites](docs/linux.md).
 
 **Before you begin:** This section runs **both real local demonstrations**. On Linux you need Git, Python **3.14** with `venv`, Docker Engine + Compose v2, `kind` and `kubectl`; `gh` is optional for detailed GitHub results. Check `make requirements` before starting. Docker access may require your Linux `sudo` password. First-time setup can take longer than five minutes.
 
@@ -106,15 +121,54 @@ Want to run only one test? Choose the separate **Docker** or **GitOps** action i
 
 ## Windows — WSL 2 + Docker Desktop
 
-On Windows 10/11, run the **same Linux-based live demo** through Ubuntu WSL 2. First install [WSL 2 + Ubuntu](https://learn.microsoft.com/en-us/windows/wsl/install) and [Docker Desktop](https://docs.docker.com/desktop/features/wsl/) with WSL Integration enabled for Ubuntu. Open PowerShell **inside this repository**:
+On Windows 10/11, run the **same Linux-based live demo** through Ubuntu WSL 2. First install [WSL 2 + Ubuntu](https://learn.microsoft.com/en-us/windows/wsl/install) and [Docker Desktop](https://docs.docker.com/desktop/features/wsl/) with WSL Integration enabled for Ubuntu. Clone in PowerShell (skip cloning if you already have the repository), then open PowerShell **inside this repository**:
+
+```powershell
+git clone https://github.com/Mishkaaass/ci-cd-lab.git
+cd ci-cd-lab
+```
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-showcase.ps1
 ```
 
-The launcher verifies Docker Desktop, sets up Python 3.14 and the Kubernetes tools **inside Ubuntu**, then starts the local console. Open `http://127.0.0.1:18002/` in Windows and click **Live Demo → Run full showcase**. Follow the terminal prompts for any first-time Ubuntu package installation or `sudo`; **never enter passwords in the browser**. Windows setup may take longer than five minutes; no native Windows container support is claimed.
+The launcher verifies Docker Desktop, sets up Python 3.14 and the Kubernetes tools **inside Ubuntu**, then starts the local console. Open `http://127.0.0.1:18002/` in Windows. In a second PowerShell window, retrieve the private tokens from the same WSL distribution:
+
+```powershell
+wsl.exe --exec sh -lc 'cat ~/.config/ci-cd-lab/unified-console/viewer.token'
+wsl.exe --exec sh -lc 'cat ~/.config/ci-cd-lab/unified-console/operator.token'
+```
+
+Unlock with the Viewer token. Click **Live Demo → Run full showcase**, enter the separate Operator token, and type `RUN all` in the original launcher terminal. Follow the terminal prompts for any first-time Ubuntu package installation or `sudo`; **never enter passwords in the browser**. Windows setup may take longer than five minutes; no native Windows container support is claimed.
 
 [Step-by-step Windows setup, Viewer token and troubleshooting](docs/windows.md).
+
+## macOS — native viewer or full Linux lab
+
+**Viewer-only (Intel and Apple silicon):** Install [Python 3.14](https://www.python.org/downloads/) and Git / Make (Apple Command Line Tools). If Homebrew is already installed, `brew install python@3.14` is an alternative. No Docker or Kubernetes is needed to explore the interface.
+
+In macOS Terminal:
+
+```bash
+git clone https://github.com/Mishkaaass/ci-cd-lab.git
+cd ci-cd-lab
+unset OPSBOARD_SHOWCASE_DIR
+make requirements
+make setup
+make viewer
+```
+
+Open **http://127.0.0.1:18002/**. In another terminal, read the private Viewer token:
+
+```bash
+cat "${XDG_CONFIG_HOME:-$HOME/.config}/ci-cd-lab/unified-console/viewer.token"
+```
+
+Stop with `Ctrl+C`. Missing Linux tools in the inventory are expected for viewer-only use.
+
+**Full live demo:** Use a dedicated Ubuntu VM or trusted Linux host, and follow the Linux section above inside that environment. The full supervisor relies on Linux Docker permissions and GNU utilities, so native macOS Docker Desktop alone is not the documented full-demo route. Use an x86-64 Linux environment for the reference GitOps image; an ARM guest may require a separately reviewed compatible application image.
+
+[macOS setup, VM access and architecture caveats](docs/macos.md).
 
 ## Architecture in three small diagrams
 

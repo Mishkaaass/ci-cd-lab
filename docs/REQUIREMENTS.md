@@ -4,13 +4,16 @@ This repository has **two independent hands-on labs** and one browser console. P
 
 | Path | Required on the host | Command | Side effects |
 |---|---|---|---|
-| **Read-only Unified Console** | Linux, Python **3.14** with `venv`, Bash/Make, browser | `make requirements` → `make setup` → `make viewer` | Creates `.venv/` and a private viewer token; **no Docker builds/deployments** |
+| **Read-only Unified Console** | Linux / macOS (Windows via WSL 2), Python **3.14** with `venv`, Bash/Make, browser | `make requirements` → `make setup` → `make viewer` | Creates `.venv/` and a private viewer token; **no Docker builds/deployments** |
 | **Docker Blue/Green only** | Above + Git, curl, Docker Engine and **Docker Compose v2**, terminal access to Docker (possibly `sudo`) | `bash scripts/reviewer.sh doctor` → `bash scripts/reviewer.sh dashboard` (Terminal A), `bash scripts/reviewer.sh up` (Terminal B), `bash scripts/reviewer.sh drill` | Creates local Compose containers/volumes; deliberately changes **demo** traffic |
 | **Full Guided Showcase** | Above + `kind`, `kubectl`, internet and enough RAM/disk for local Kubernetes/Argo CD | `make showcase` (or `bash scripts/showcase.sh`) | Starts/repairs local Docker services, may create dedicated kind cluster, and runs fixed drills **after explicit UI action** |
 | **Windows (Ubuntu WSL 2)** | WSL 2 Ubuntu + Docker Desktop with Linux containers/WSL integration + browser | PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-showcase.ps1` | May request approval for Ubuntu packages; uses WSL-scoped Python, Docker and own kind cluster |
+| **macOS full showcase** | Dedicated Ubuntu VM or Linux host; matching image architecture | [macOS runbook](macos.md) | Linux-hosted lab; do not start native macOS supervisor |
 | **Contributing / Python tests** | Python **3.14** + `venv`, internet for PyPI | `make setup-dev` then `.venv/bin/python -m pytest` | Installs pinned `requirements-dev.txt` **only into `.venv`**, not system Python |
 
 **New user?** Begin with the **read-only console**. You can learn the architecture and inspect the latest available CI/CD results without building containers. The full showcase is separate and has real, local effects. No AWS account is involved.
+
+**Choose your operating system:** [Linux](linux.md) · [Windows / WSL 2](windows.md) · [macOS](macos.md). The Linux reference environment is covered by CI; these other OS paths are not a claim of complete runtime certification.
 
 ## Recommended isolated Python setup
 
@@ -24,7 +27,7 @@ make viewer             # read-only console at http://127.0.0.1:18002/
 
 The viewer and local showcase supervisor use only the **Python standard library**. `make setup` **does not install `requirements.txt`**, because the viewer does not import FastAPI or SQLAlchemy. It reuses an existing compatible `.venv` and refuses to overwrite an incomplete or incompatible one. No `source .venv/bin/activate` is needed — launchers explicitly run `.venv/bin/python`.
 
-When ready for both local deployment drills, stop the viewer with `Ctrl+C`, confirm Docker/kind requirements and run:
+On macOS, use the viewer route only; move to the documented Ubuntu environment for the complete demo. When ready for both local deployment drills on Linux or WSL 2, stop the viewer with `Ctrl+C`, confirm Docker/kind requirements and run:
 
 ```bash
 make showcase
