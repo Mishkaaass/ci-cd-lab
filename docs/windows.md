@@ -9,6 +9,10 @@ OpsBoard uses Linux containers and Bash. **Windows runs the same real lab throug
 3. Install and start [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/). Select **Linux containers** and the **WSL 2** backend. Under **Settings → Resources → WSL Integration**, enable your Ubuntu distribution and select **Apply & Restart**. [Docker's WSL guide](https://docs.docker.com/desktop/features/wsl/).
 4. Get this repository from GitHub using **Code → Download ZIP → Extract All**, or use Git for Windows and `git clone https://github.com/Mishkaaass/ci-cd-lab.git`.
 
+## Viewer-only alternative
+
+If you only want to explore, open Ubuntu WSL 2, install Git, Make and user-scoped Python 3.14 with venv as in [Linux prerequisites](linux.md), clone into the Linux home directory, and run `make requirements`, `make setup`, `make viewer`. No Docker Desktop or Kubernetes is needed for the viewer. Use the same local URL and Viewer token below; stop the viewer before starting the full showcase.
+
 ## Launch (Windows PowerShell)
 
 Open PowerShell in the extracted / cloned `ci-cd-lab` directory, and run **one command**:
